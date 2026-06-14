@@ -411,10 +411,10 @@ function injectChrome(){
     <button class="burger" id="burger" aria-label="Menu"><span></span><span></span><span></span></button>
     <div class="links" id="navlinks">
       ${link("index.html","Home","home")}
-      ${link("map.html","Map","map")}
-      ${link("places.html","Places","places")}
       ${link("routes.html","Routes","routes")}
       ${link("travel.html","Travel","travel")}
+      ${link("places.html","Places","places")}
+      ${link("map.html","Map","map")}
       ${link("results.html","Results","results")}
     </div>
     <div class="spacer"></div>

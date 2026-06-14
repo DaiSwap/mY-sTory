@@ -16,14 +16,39 @@
 
 <section class="section center" style="padding-bottom:0">
   <div class="wrap">
-    <div class="tag reveal">The trip &middot; two ways</div>
-    <h2 class="reveal">Routes &amp; when to go.</h2>
-    <p class="sub reveal">Three curated paths through the shortlist &mdash; pick one to see the line on the map and the stops in order. Below, the months that work best for each region.</p>
+    <div class="tag reveal">Start here</div>
+    <h2 class="reveal">Plan the trip.</h2>
+    <p class="sub reveal">What you can do, which curated route hits the most, and when each region is at its best. Start here, then head to <a href="places.html" style="color:var(--accent);font-weight:600">Places</a> to vote on the picks for your group.</p>
   </div>
 </section>
 
-<section class="section" style="padding-top:34px">
+<section class="section" style="padding-top:30px">
   <div class="wrap">
+    <div class="info-grid">
+      <div class="info-card span2 reveal">
+        <div class="ic">&#127919;</div>
+        <h3>Pick by what you want to do</h3>
+        <p>Start with activities, not geography. Each row maps a kind of day to the places that nail it.</p>
+        <div class="matrix">
+          <div class="mrow"><span class="act">Caves &amp; adventure</span><span class="pill-tag">Phong Nha</span><span class="pill-tag">Ha Giang</span></div>
+          <div class="mrow"><span class="act">Mountains &amp; trekking</span><span class="pill-tag">Ha Giang</span><span class="pill-tag">Pu Luong</span><span class="pill-tag">Sapa</span></div>
+          <div class="mrow"><span class="act">Karst boats &amp; kayaking</span><span class="pill-tag">Ninh Binh (rivers)</span><span class="pill-tag">Cat Ba / Lan Ha (sea)</span></div>
+          <div class="mrow"><span class="act">Beaches &amp; coast</span><span class="pill-tag">Quy Nhon</span></div>
+          <div class="mrow"><span class="act">Old towns, culture &amp; food</span><span class="pill-tag">Hanoi</span><span class="pill-tag">Hue</span><span class="pill-tag">Hoi An</span></div>
+          <div class="mrow"><span class="act">City energy &amp; war history</span><span class="pill-tag">Ho Chi Minh City</span><span class="pill-tag">Hanoi</span></div>
+          <div class="mrow"><span class="act">Easy / low-effort days</span><span class="pill-tag">Hoi An</span><span class="pill-tag">Ninh Binh</span><span class="pill-tag">Quy Nhon</span></div>
+        </div>
+        <div class="callout">Want to weigh these properly? The <a href="places.html" style="color:var(--accent);font-weight:600">chart on the Places page</a> plots every option on crowd vs activity, and you can vote on each.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" style="padding-top:30px">
+  <div class="wrap">
+    <div class="tag reveal">Three curated paths</div>
+    <h2 class="reveal" style="font-size:clamp(28px,4.4vw,40px)">Best routes.</h2>
+    <p class="sub reveal" style="margin-bottom:24px">Each option groups places that travel well together. Pick one to see the line on the map, the stops in order, and a rough per-person budget compared to yours.</p>
     <div class="route-picker reveal" id="routePicker"></div>
     <div class="route-frame reveal">
       <div id="routeMap"></div>
@@ -35,14 +60,14 @@
 <section class="section" style="padding-top:20px">
   <div class="wrap">
     <div class="tag reveal">Climate at a glance</div>
-    <h2 class="reveal" style="font-size:clamp(24px,4vw,36px)">When to go.</h2>
+    <h2 class="reveal" style="font-size:clamp(28px,4.4vw,40px)">When to go.</h2>
     <p class="sub reveal" style="margin-bottom:6px">Suitability by region across the year. Greener is better; red is monsoon / typhoon territory.</p>
     <div class="whenmap reveal" id="whenmap"></div>
   </div>
 </section>
 
 <div class="foot">
-  Costs are rough baselines &mdash; live flight and hotel pricing comes later. Compare with the <a href="travel.html" style="color:var(--accent);font-weight:600">travel page</a> for transit times.
+  Got a feel for the trip shape? Head to <a href="places.html" style="color:var(--accent);font-weight:600">Places</a> to compare and vote, or <a href="travel.html" style="color:var(--accent);font-weight:600">Travel</a> for flights, visa and transit times.
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
