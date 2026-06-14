@@ -1243,7 +1243,7 @@ function renderResults(){
           </div>`;
       }).join("")}
     </div>
-    ${voters.length ? `<div class="res-voters">Voted: ${voters.map(v => `<b>${escapeHTML(v)}</b>`).join(" &middot; ")}</div>` : ""}`;
+    ${voters.length ? `<div class="res-voters"><b>${voters.length}</b> ${voters.length === 1 ? "person has" : "people have"} voted. <span class="rv-dim">Individual names stay private &mdash; only the totals are shared.</span></div>` : ""}`;
 
   host.querySelectorAll(".res-bar").forEach(el => {
     el.addEventListener("click", () => openSheet(el.dataset.id));
