@@ -1319,6 +1319,147 @@ function renderHomeGreeting(){
 }
 
 function initResults(){ renderResults(); }
+
+/* ============================================================
+   TRIP STORY — the closing-scene block on the Results page.
+   Pure render: derives everything from the live votes + Profile,
+   stores nothing of its own. The user never sees the maths
+   ("above-average", "score", "median") — only the resulting story.
+   ============================================================ */
+
+/** Default suggested nights per place, derived from the curated tier. */
+function _storyNights(p){ return p.tier === 1 ? 3 : p.tier === 2 ? 2 : 1; }
+
+/** Returns the places the group is leaning toward — those with a vote
+ *  score above the median across all places. Math stays here. */
+function pickedByGroup(){
+  const rows = PLACES.map(d => {
+    const vs = ALL_VOTES.filter(v => v.placeId === d.id);
+    const yes = vs.filter(v => v.vote === "yes").length;
+    const maybe = vs.filter(v => v.vote === "maybe").length;
+    return { place: d, score: yes * 2 + maybe };
+  });
+  if(!rows.length) return [];
+  const scores = rows.map(r => r.score).slice().sort((a, b) => a - b);
+  const mid = scores.length / 2;
+  const median = scores.length % 2
+    ? scores[Math.floor(mid)]
+    : (scores[mid - 1] + scores[mid]) / 2;
+  return rows.filter(r => r.score > 0 && r.score > median).map(r => r.place);
+}
+
+/** Returns the places the current user has voted Yes or Maybe on. */
+function pickedByMe(){
+  const mv = myVotes();
+  return PLACES.filter(p => mv[p.id] === "yes" || mv[p.id] === "maybe");
+}
+
+/** Rough per-person cost for the trip — reuses the same formula as the route estimator. */
+function _storyCostPP(stops){
+  const flights = 25000, visa = 2100, perDay = 3000, perTransfer = 1500;
+  const nights = stops.reduce((s, p) => s + _storyNights(p), 0);
+  return flights + visa + nights * perDay + Math.max(0, stops.length - 1) * perTransfer;
+}
+
+/** Builds the story paragraph for N stops. Plain English, no jargon, no abbreviations. */
+function composeStoryParagraph(stops, mode){
+  const n = stops.length;
+  if(n === 0) return "";
+  const totalNights = stops.reduce((s, p) => s + _storyNights(p), 0);
+  const cost = formatINR(_storyCostPP(stops));
+  const subject = mode === "mine" ? "Your trip" : "Your group's trip";
+
+  if(n === 1){
+    const p = stops[0];
+    return `${subject} would be quietly simple &mdash; <b>${totalNights} ${totalNights === 1 ? "night" : "nights"} in ${escapeHTML(p.name)}</b>. Around <b>${cost}</b> per person.`;
+  }
+  const first = escapeHTML(stops[0].name);
+  const last = escapeHTML(stops[n - 1].name);
+  if(n === 2){
+    return `${subject}: a focused <b>${totalNights}-day</b> trip &mdash; <b>${first}</b>, then <b>${last}</b>. Around <b>${cost}</b> per person.`;
+  }
+  if(n === 3){
+    const mid = escapeHTML(stops[1].name);
+    return `${subject}: <b>${totalNights} days</b> across <b>${first}</b>, <b>${mid}</b> and <b>${last}</b>. Around <b>${cost}</b> per person.`;
+  }
+  if(n === 4){
+    const middles = stops.slice(1, -1).map(p => escapeHTML(p.name)).join(" and ");
+    return `${subject}: <b>${totalNights} days</b> starting in <b>${first}</b>, through ${middles}, ending in <b>${last}</b>. Around <b>${cost}</b> per person.`;
+  }
+  // 5+ stops — summarise the middle so the sentence stays readable
+  const middlesArr = stops.slice(1, -1).map(p => escapeHTML(p.name));
+  const middles = middlesArr.length <= 3
+    ? middlesArr.slice(0, -1).join(", ") + " and " + middlesArr[middlesArr.length - 1]
+    : `${middlesArr.slice(0, 2).join(", ")} and ${middlesArr.length - 2} more`;
+  return `${subject}: <b>${totalNights} days, ${n} stops</b> &mdash; starting in <b>${first}</b>, working south through ${middles}, ending in <b>${last}</b>. Around <b>${cost}</b> per person.`;
+}
+
+/** Renders the small horizontal strip of stop chips with km between. */
+function renderStoryStrip(stops){
+  let html = "";
+  stops.forEach((p, i) => {
+    const nights = _storyNights(p);
+    html += `<span class="story-chip"><b>${escapeHTML(p.name)}</b> &middot; ${nights} ${nights === 1 ? "night" : "nights"}</span>`;
+    if(i < stops.length - 1){
+      const km = haversineKm(p.lat, p.lng, stops[i+1].lat, stops[i+1].lng);
+      html += `<span class="story-leg">${Math.round(km)} km</span>`;
+    }
+  });
+  return html;
+}
+
+/** The Group's / My toggle pill. */
+function renderStoryToggle(mode){
+  return `
+    <div class="story-toggle" role="tablist" aria-label="Trip view">
+      <button class="story-tab ${mode === "group" ? "on" : ""}" data-mode="group" role="tab" aria-selected="${mode === "group"}">Group's trip</button>
+      <button class="story-tab ${mode === "mine" ? "on" : ""}" data-mode="mine" role="tab" aria-selected="${mode === "mine"}">My picks</button>
+    </div>`;
+}
+
+/**
+ * Renders the trip-story block. Called from inside renderResults so it stays in sync
+ * with every vote change (own or remote). Read-only; the only user input is the toggle.
+ */
+function renderTripStory(){
+  const host = document.getElementById("trip-story");
+  if(!host) return;
+
+  const mode = host.dataset.mode === "mine" ? "mine" : "group";
+  const stops = mode === "mine" ? pickedByMe() : pickedByGroup();
+
+  if(stops.length === 0){
+    host.innerHTML = `
+      ${renderStoryToggle(mode)}
+      <p class="story-empty">${mode === "mine"
+        ? "Cast a few Yes or Maybe votes and this is where your trip's story will land."
+        : "When the group's votes settle, this is where the trip's story will land."}</p>`;
+    bindStoryToggle(host);
+    return;
+  }
+
+  // North → south so the story reads top-to-bottom geographically.
+  stops.sort((a, b) => b.lat - a.lat);
+
+  host.innerHTML = `
+    ${renderStoryToggle(mode)}
+    <h3 class="story-headline">${mode === "mine" ? "Your trip is taking shape." : "The group's trip is taking shape."}</h3>
+    <p class="story-paragraph">${composeStoryParagraph(stops, mode)}</p>
+    <div class="story-strip" aria-label="Stops and distances">${renderStoryStrip(stops)}</div>
+    <p class="story-note">A rough first draft &mdash; verify before booking anything.</p>`;
+  bindStoryToggle(host);
+}
+
+/** (Re-)attaches click handlers to the toggle pills after each render. */
+function bindStoryToggle(host){
+  host.querySelectorAll(".story-tab").forEach(b => {
+    b.addEventListener("click", () => {
+      host.dataset.mode = b.dataset.mode;
+      renderTripStory();
+    });
+  });
+}
+
 /**
  * Renders the results page as a horizontal bar chart.
  * Bar length = each place's score (yes×2 + maybe) as a fraction of the maximum possible
@@ -1333,6 +1474,7 @@ function renderResults(){
 
   if(ALL_VOTES.length === 0){
     host.innerHTML = `<div class="empty">No votes yet. Open the <a href="map.html" style="color:var(--accent);font-weight:600">map</a> or <a href="places.html" style="color:var(--accent);font-weight:600">places</a> and start voting.</div>`;
+    renderTripStory();   // still render the empty-state trip-story below
     return;
   }
 
@@ -1380,6 +1522,9 @@ function renderResults(){
       if(e.key === "Enter" || e.key === " "){ e.preventDefault(); openSheet(el.dataset.id); }
     });
   });
+
+  // The closing scene: keep the trip-story block in sync with every vote change.
+  renderTripStory();
 }
 
 /* ============================================================
