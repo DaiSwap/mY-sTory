@@ -60,6 +60,7 @@
             <tr><td class="lead">Bengaluru (BLR)</td><td>Hanoi, HCMC, Da Nang</td><td>Vietjet (+ connecting IndiGo/AirAsia)</td><td class="r">&#8377;18k&ndash;30k</td></tr>
             <tr><td class="lead">Delhi (DEL)</td><td>Hanoi, HCMC</td><td>Air India, IndiGo, Vietjet, Vietnam Airlines</td><td class="r">&#8377;18k&ndash;28k</td></tr>
             <tr><td class="lead">Mumbai (BOM)</td><td>Hanoi, HCMC</td><td>Air India, IndiGo, Vietjet</td><td class="r">&#8377;19k&ndash;30k</td></tr>
+            <tr><td class="lead">Chennai (MAA)</td><td>HCMC (seasonal direct), most via 1-stop</td><td>Vietjet (seasonal), IndiGo / AirAsia (via BKK / KL)</td><td class="r">&#8377;19k&ndash;32k</td></tr>
             <tr><td class="lead">Kolkata (CCU)</td><td>Hanoi, HCMC</td><td>IndiGo, Vietjet</td><td class="r">&#8377;17k&ndash;27k</td></tr>
           </tbody>
         </table>
@@ -74,10 +75,13 @@
               <button class="tp-opt" type="button" data-val="BLR" role="radio" aria-checked="false">Bengaluru</button>
               <button class="tp-opt" type="button" data-val="DEL" role="radio" aria-checked="false">Delhi</button>
               <button class="tp-opt" type="button" data-val="BOM" role="radio" aria-checked="false">Mumbai</button>
+              <button class="tp-opt" type="button" data-val="MAA" role="radio" aria-checked="false">Chennai</button>
               <button class="tp-opt" type="button" data-val="CCU" role="radio" aria-checked="false">Kolkata</button>
-              <button class="tp-opt" type="button" data-val="OTHER" role="radio" aria-checked="false">Other</button>
+              <button class="tp-opt" type="button" data-val="OTHER" role="radio" aria-checked="false">Other&hellip;</button>
             </div>
           </div>
+          <input id="tpCustomOrigin" class="tp-custom" type="text" placeholder="Type your city (e.g. Pune, Ahmedabad)" maxlength="40" autocomplete="off" hidden aria-label="Your departure city">
+
           <div class="tp-row">
             <span class="tp-label">Exiting via</span>
             <div class="tp-opts" data-key="exit" role="radiogroup" aria-label="Exit airport in Vietnam">
