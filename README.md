@@ -35,16 +35,25 @@ This site collapses that into one shared place:
 
 ## How the site flows
 
-The nav reflects the order people should move through it:
+The linear flow is short — selection happens on Routes, results on
+Results. Everything else is optional:
 
-| Step | Page | What it answers |
-|---|---|---|
-| 1 | **Home** | What is this? |
-| 2 | **Routes** | What could the trip look like? (activities-by-city, 3 curated routes on a map, when to go) |
-| 3 | **Places** | Which of these are right for us? (compare, suggest a missing place, vote) |
-| 4 | **Travel** | How do I get there and around? (flights from India, visa, in-country transit) |
-| 5 | **Map** | Where are they, and where do my picks connect? |
-| 6 | **Results** | What did the group decide? *(the closing story, coming soon)* |
+```
+Home → Routes (the picker) → Map → Results
+              │
+              ├──→ Places (optional, in-depth voting · overrides Routes)
+              │
+              └──→ Travel (optional, logistics reference)
+```
+
+| Page | What it answers |
+|---|---|
+| **Home** | What is this? Single CTA: Plan the trip. |
+| **Routes** | What could the trip look like, and which places do I want? Activities-by-region pills (tap to select), three curated routes on a satellite map, climate by month and region. |
+| **Places** *(optional)* | Want finer control? Yes / Maybe / Skip voting per place. Places votes **always override** Routes picks. |
+| **Travel** *(optional)* | Flights from India, visa, in-country transit times. |
+| **Map** | Every place on satellite, coloured by your effective state. "My route" overlay draws a line through your picks. |
+| **Results** | What did the group decide? Trip-story synthesis with two tabs — *My picks* and *What most picked*. |
 
 The whole arc is **explore → decide together → see the trip you chose**.
 
@@ -53,40 +62,58 @@ The whole arc is **explore → decide together → see the trip you chose**.
 ## What's live now
 
 - **Story-first onboarding** — five plain questions (name, age, group
-  size, ₹ budget per person, ₹ buffer per person). No login.
-- **Routes page** — activity matrix (caves, mountains, beaches…),
-  three curated routes drawn on a real satellite map with km, days and
-  per-person ₹ estimates, climate by month and region.
-- **Places page** — every shortlisted place, side by side, with a
-  *crowd × activity* chart and Yes / Maybe / Skip voting. Anonymous —
-  names stay private; only totals show.
+  size, ₹ budget per person, ₹ buffer per person). Funny-but-helpful
+  rejection messages when answers don't make sense; after two failed
+  tries on budget/buffer the accepted range is appended. No login.
+- **Routes page (the picker)** — activity matrix where tapping a place
+  pill adds it to your picks (same place across rows toggles together).
+  Three curated routes drawn on a real satellite map with km, days and
+  per-person ₹ estimates. Climate by month and region.
+- **Places page (optional, in-depth)** — every shortlisted place, side
+  by side, with a *crowd × activity* chart and Yes / Maybe / Skip voting.
+  Anonymous — names stay private; only counts show. Tagged
+  *Optional · for finer control* at the top. Places votes always
+  override Routes picks.
 - **"Got a place we missed?"** — anonymous suggestion form on Places.
-  Adds up across the group, dedups by place name.
-- **Map** — every place on satellite imagery. *"My route"* overlay
-  draws a line through your Yes + Maybe picks and shows km between
-  consecutive stops.
-- **Results page** — live horizontal bar chart of votes, scaled
-  against the group's maximum possible score.
-- **Live sync via Firebase Firestore** — votes and suggestions
-  propagate in real time across browsers. Local-storage fallback when
-  Firebase isn't reachable.
+  Count-only — individual suggestions never displayed. Min 2 chars, max
+  2 sentences; longer feedback nudges users to message daiswap directly.
+- **Map** — every place on satellite imagery, coloured by **effective
+  state** (Places vote wins, else Routes pick treated as Yes). Marker
+  labels appear after one zoom-in step. *"My route"* overlay draws a
+  line through your effective picks with km between consecutive places.
+- **Results page** — trip-story synthesis as the single answer to
+  "what did the group decide". Two tabs: *My picks* (default) and
+  *What most picked*. Below it, a tile grid lets users navigate back
+  to any page.
+- **Live sync via Firebase Firestore** — votes, suggestions and
+  RoutePicks propagate in real time across users. Local-storage
+  fallback when Firebase isn't reachable.
 
 ---
 
 ## What's coming
 
-The **synthesis block on Results** — one paragraph that reads back
-the group's leaning as a trip story:
+See [`docs/next-steps/`](./docs/next-steps/) for the queue with detailed
+per-PR plans. At time of writing:
 
-> *"Your group is leaning toward a 12-day north-to-central trip —
-> Hanoi, Ha Giang, Phong Nha, Hoi An. Around ₹68,000 per person."*
+- **PR-C — Curated routes UI redesign.** Replaces the 3-cards-above-map
+  layout with tabs + summary + map + horizontal city flow.
+- **PR-B — Home flow diagram.** Calligraphic flowing-curve SVG instead
+  of the current bare-hero home page.
 
-Plus a compact strip showing each stop with nights and km between
-them. Read-only. Group-default with a *My picks* toggle.
+Parked for later (not on the active queue):
 
-The full thinking — including a 10-specialist review of the original
-"day-by-day builder" idea and why it was rewritten into this much
-smaller block — lives in [`docs/day-by-day-builder/`](./docs/day-by-day-builder/).
+- **Day-by-day calendar dates** — adds a 6th onboarding step for the
+  trip start date so the story reads *"You'll arrive on August 14…"*
+  instead of *"12 days…"*. Full plan at
+  [`docs/next-steps/01-day-by-day-dates.md`](./docs/next-steps/01-day-by-day-dates.md).
+- **Photos & food gallery** — shown on Results as a "Soon · Coming next
+  phase" tile.
+
+The full thinking on the day-by-day builder — including a 10-specialist
+review of the original proposal and why it was rewritten into a much
+smaller synthesis block — lives in
+[`docs/day-by-day-builder/`](./docs/day-by-day-builder/).
 
 ---
 
@@ -135,21 +162,26 @@ the `firebaseConfig` placeholders aren't filled in.
 
 ```
 .
-├── index.html        Home
-├── routes.html       Routes & when to go (start here for trip-shape)
-├── travel.html       Flights, visa, in-country transit
-├── places.html       Compare + vote + suggestions
-├── map.html          Satellite map + "My route" overlay
-├── results.html      Live tally (synthesis block forthcoming)
-├── styles.css        Shared
-├── app.js            Shared (PLACES data, voting, suggestions,
-│                     onboarding, page inits)
+├── index.html             Home (hero + Plan-the-trip CTA only)
+├── routes.html            Routes — the primary picker (activity matrix,
+│                          three curated routes, climate)
+├── places.html            Compare + vote + suggestions (optional)
+├── travel.html            Flights, visa, in-country transit (optional)
+├── map.html               Satellite map + "My route" overlay
+├── results.html           Trip story (My picks / What most picked) +
+│                          tile grid for navigating back
+├── styles.css             Shared
+├── app.js                 Shared — PLACES data, TripVotes, RoutePicks,
+│                          effectiveVote resolver, voting, suggestions,
+│                          onboarding, page inits
 └── docs/
-    └── day-by-day-builder/
-        ├── README.md         Index + cross-review themes
-        ├── plan-v0.md        Original proposal (now superseded)
-        ├── plan-v1.md        The current direction (synthesis-on-Results)
-        └── review-01..10.md  10 specialist critiques of v0
+    ├── README.md          Top-level docs index
+    ├── feedback-log.md    Every user suggestion with status
+    ├── next-steps/        Detailed plans for each queued PR
+    ├── session-logs/      Dated snapshots of the codebase state
+    └── day-by-day-builder/ 10-specialist review of the original
+                           day-by-day proposal (historical, kept for
+                           the reasoning trail)
 ```
 
 ---
@@ -160,3 +192,7 @@ This is a family project. If you stumble on it, you're welcome to
 read, fork, take ideas. The trip dates and group size are obviously
 specific to one family — adapting the data is just editing the
 `PLACES` and `ROUTES` arrays at the top of `app.js`.
+
+## License
+
+[MIT](./LICENSE). Use, fork, adapt freely — no warranty.

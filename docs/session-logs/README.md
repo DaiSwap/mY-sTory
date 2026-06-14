@@ -11,6 +11,7 @@ Older entries are kept for history, not as current state.
 
 | Date | File | One-line summary |
 |---|---|---|
+| 2026-06-15 (eve) | [`2026-06-15-followups-and-prd.md`](./2026-06-15-followups-and-prd.md) | PRs #23–#27: mobile overlap fix, comprehensive docs, quick-fixes bundle, RoutePicks Firestore sync (PR-D), brand-link tweak. Group view now genuinely group-wide once Firestore rule deploys. |
 | 2026-06-15 | [`2026-06-15-restructure-shipped.md`](./2026-06-15-restructure-shipped.md) | UX restructure shipped: Routes is the picker, Places is optional with override, Map+Results read combined state, bar chart removed, tiles moved Home→Results. |
 | 2026-06-14 | [`2026-06-14-state-of-site.md`](./2026-06-14-state-of-site.md) | After 11 PRs: site is feature-complete for the trip-planning loop. Next up: optional `startDate` in onboarding. |
 
