@@ -18,7 +18,7 @@
   <div class="wrap">
     <div class="tag reveal">Start here</div>
     <h2 class="reveal">Plan the trip.</h2>
-    <p class="sub reveal">What you can do, which curated route hits the most, and when each region is at its best.</p>
+    <p class="sub reveal">Tap the places you'd like to visit. They'll show up on the map and on your final story.</p>
   </div>
 </section>
 
@@ -27,17 +27,18 @@
     <div class="info-grid">
       <div class="info-card span2 reveal info-ref">
         <div class="ic">&#127919;</div>
-        <h3>Which place is for what</h3>
-        <p class="ref-sub">Just so you know what each place is best for &mdash; use it when you vote on places later. Not a picker, nothing to click.</p>
+        <h3>Pick what you'd like to do</h3>
+        <p class="ref-sub">Tap any place to add it to your picks. Tap again to remove. The same place across rows toggles together.</p>
         <div class="matrix">
-          <div class="mrow"><span class="act">Caves &amp; adventure</span><span class="pill-tag">Phong Nha</span><span class="pill-tag">Ha Giang</span></div>
-          <div class="mrow"><span class="act">Mountains &amp; trekking</span><span class="pill-tag">Ha Giang</span><span class="pill-tag">Pu Luong</span><span class="pill-tag">Sapa</span></div>
-          <div class="mrow"><span class="act">Karst boats &amp; kayaking</span><span class="pill-tag">Ninh Binh (rivers)</span><span class="pill-tag">Cat Ba / Lan Ha (sea)</span></div>
-          <div class="mrow"><span class="act">Beaches &amp; coast</span><span class="pill-tag">Quy Nhon</span></div>
-          <div class="mrow"><span class="act">Old towns, culture &amp; food</span><span class="pill-tag">Hanoi</span><span class="pill-tag">Hue</span><span class="pill-tag">Hoi An</span></div>
-          <div class="mrow"><span class="act">City energy &amp; war history</span><span class="pill-tag">Ho Chi Minh City</span><span class="pill-tag">Hanoi</span></div>
-          <div class="mrow"><span class="act">Easy / low-effort days</span><span class="pill-tag">Hoi An</span><span class="pill-tag">Ninh Binh</span><span class="pill-tag">Quy Nhon</span></div>
+          <div class="mrow"><span class="act">Caves &amp; adventure</span><button type="button" class="pill-tag" data-id="phongnha" aria-pressed="false">Phong Nha</button><button type="button" class="pill-tag" data-id="hagiang" aria-pressed="false">Ha Giang</button></div>
+          <div class="mrow"><span class="act">Mountains &amp; trekking</span><button type="button" class="pill-tag" data-id="hagiang" aria-pressed="false">Ha Giang</button><button type="button" class="pill-tag" data-id="puluong" aria-pressed="false">Pu Luong</button><button type="button" class="pill-tag" data-id="sapa" aria-pressed="false">Sapa</button></div>
+          <div class="mrow"><span class="act">Karst boats &amp; kayaking</span><button type="button" class="pill-tag" data-id="ninhbinh" aria-pressed="false">Ninh Binh (rivers)</button><button type="button" class="pill-tag" data-id="catba" aria-pressed="false">Cat Ba / Lan Ha (sea)</button></div>
+          <div class="mrow"><span class="act">Beaches &amp; coast</span><button type="button" class="pill-tag" data-id="quynhon" aria-pressed="false">Quy Nhon</button></div>
+          <div class="mrow"><span class="act">Old towns, culture &amp; food</span><button type="button" class="pill-tag" data-id="hanoi" aria-pressed="false">Hanoi</button><button type="button" class="pill-tag" data-id="hue" aria-pressed="false">Hue</button><button type="button" class="pill-tag" data-id="hoian" aria-pressed="false">Hoi An</button></div>
+          <div class="mrow"><span class="act">City energy &amp; war history</span><button type="button" class="pill-tag" data-id="hcmc" aria-pressed="false">Ho Chi Minh City</button><button type="button" class="pill-tag" data-id="hanoi" aria-pressed="false">Hanoi</button></div>
+          <div class="mrow"><span class="act">Easy / low-effort days</span><button type="button" class="pill-tag" data-id="hoian" aria-pressed="false">Hoi An</button><button type="button" class="pill-tag" data-id="ninhbinh" aria-pressed="false">Ninh Binh</button><button type="button" class="pill-tag" data-id="quynhon" aria-pressed="false">Quy Nhon</button></div>
         </div>
+        <p class="travel-sidelink">Need to check flights and visa? <a href="travel.html">Open Travel</a>.</p>
       </div>
     </div>
   </div>
@@ -68,9 +69,12 @@
 <section class="section center" style="padding-top:40px;padding-bottom:20px">
   <div class="wrap">
     <div class="next-cta reveal">
-      <h3>Got a feel for the shape of the trip?</h3>
-      <p>Now head to Places and pick the ones <em>you</em> want — the group's choices add up live.</p>
-      <a class="hbtn hbtn-fill" href="places.html">Choose your places &rarr;</a>
+      <h3>Got your picks?</h3>
+      <p>See them drawn on the satellite map of Vietnam, with your route through them.</p>
+      <div class="next-cta-actions">
+        <a class="hbtn hbtn-fill" href="map.html">See your picks on the map &rarr;</a>
+        <a class="hbtn hbtn-line" href="places.html">Want finer control? Vote Yes / Maybe / Skip on each place &rarr;</a>
+      </div>
     </div>
   </div>
 </section>

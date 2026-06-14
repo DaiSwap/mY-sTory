@@ -283,6 +283,54 @@ const Profile = {
  * so a single device still works offline. Every value read from either store is validated
  * via sanitiseVote() before reaching the UI.
  */
+/* ============================================================
+   ROUTE PICKS — parallel store to TripVotes, populated by clicks
+   on Routes page activity matrix and curated stops.
+   - Binary set of place IDs (no yes/maybe/skip — just selected).
+   - localStorage only in Phase 1; group-sync via Firestore comes later.
+   - Resolution rule (used by Map/Results in Phase 2): if myVotes[id] is set,
+     use it; else if routePicks has id, treat as 'yes'; else null.
+   ============================================================ */
+const RoutePicks = {
+  _lk: "routePicks_local",
+  _listeners: [],
+  _get(){
+    try {
+      const arr = JSON.parse(localStorage.getItem(this._lk));
+      return Array.isArray(arr) ? new Set(arr.filter(x => typeof x === "string")) : new Set();
+    } catch(e){ Log.warn("RoutePicks._get", "parse failed; resetting", e); return new Set(); }
+  },
+  _set(s){
+    try { localStorage.setItem(this._lk, JSON.stringify([...s])); }
+    catch(e){ Log.error("RoutePicks._set", "write failed", e); }
+  },
+  has(id){ return this._get().has(id); },
+  ids(){ return [...this._get()]; },
+  toggle(id){
+    if(!byId(id)) return;                   // ignore unknown place IDs
+    const s = this._get();
+    if(s.has(id)) s.delete(id); else s.add(id);
+    this._set(s);
+    this._listeners.forEach(fn => { try { fn(); } catch(e){ Log.warn("RoutePicks.toggle", "listener threw", e); } });
+  },
+  onChange(fn){ this._listeners.push(fn); }
+};
+
+/** Updates every .pill-tag[data-id] and .stop[data-id] in the DOM to reflect current RoutePicks state. */
+function applyRoutePicksUI(){
+  const picks = new Set(RoutePicks.ids());
+  document.querySelectorAll(".pill-tag[data-id]").forEach(p => {
+    const on = picks.has(p.dataset.id);
+    p.classList.toggle("on", on);
+    p.setAttribute("aria-pressed", on ? "true" : "false");
+  });
+  document.querySelectorAll(".stop[data-id]").forEach(s => {
+    const on = picks.has(s.dataset.id);
+    s.classList.toggle("on", on);
+    s.setAttribute("aria-pressed", on ? "true" : "false");
+  });
+}
+
 const TripVotes = {
   /** True when Firestore is wired up; false when running on localStorage only. */
   live: !!_db,
@@ -1295,9 +1343,9 @@ function initRoutes(){
     const fit = budgetFit(cost);
     const stopsHtml = r.stops.map((s,i)=>{
       const p = byId(s.id); if(!p) return "";
-      return `<div class="stop"><div class="stop-n">${i+1}</div>
-        <div class="stop-body"><div class="stop-name">${p.name}</div>
-          <div class="stop-meta">${p.region} · ${s.nights} night${s.nights>1?'s':''}</div></div></div>`;
+      return `<button type="button" class="stop" data-id="${s.id}" aria-pressed="false" aria-label="Toggle ${escapeHTML(p.name)} in your picks"><div class="stop-n">${i+1}</div>
+        <div class="stop-body"><div class="stop-name">${escapeHTML(p.name)}</div>
+          <div class="stop-meta">${escapeHTML(p.region)} · ${s.nights} night${s.nights>1?'s':''}</div></div></button>`;
     }).join("");
     const totalGroup = Profile.isComplete() ? `<span class="rm-chip">${formatINR(cost*Profile.get().groupSize)} for ${Profile.get().groupSize}</span>` : "";
     meta.innerHTML = `
@@ -1314,6 +1362,7 @@ function initRoutes(){
       <p class="rm-note">${r.note}</p>
       <div class="stop-list">${stopsHtml}</div>
       <p class="rm-disclaimer">Estimate is a rough sum of flights (~₹25k), e-visa (~₹2.1k), in-country (~₹3k/day) and inter-stop transfers (~₹1.5k each). Hotels & activities vary; treat as a baseline.</p>`;
+    applyRoutePicksUI();
   }
 
   picker.querySelectorAll(".route-pick").forEach(btn=>{
@@ -1325,6 +1374,21 @@ function initRoutes(){
   });
   showRoute(ROUTES[0].id);
   setTimeout(()=>map.invalidateSize(),250);
+
+  // Route-picks wiring: delegated click on the activity matrix and the route-meta
+  // (which re-renders when the user picks a different curated route). Listener
+  // syncs every visible pill / stop with the stored selection.
+  const togglePickFromEvent = (e) => {
+    const t = e.target.closest("[data-id]");
+    if(!t || !t.matches(".pill-tag, .stop")) return;
+    RoutePicks.toggle(t.dataset.id);
+  };
+  const matrixEl = document.querySelector(".matrix");
+  if(matrixEl) matrixEl.addEventListener("click", togglePickFromEvent);
+  const metaEl = document.getElementById("routeMeta");
+  if(metaEl) metaEl.addEventListener("click", togglePickFromEvent);
+  RoutePicks.onChange(applyRoutePicksUI);
+  applyRoutePicksUI();
 
   /* when-to-go strip with staggered cell reveal */
   const wh = document.getElementById("whenmap");
