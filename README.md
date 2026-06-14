@@ -2,7 +2,7 @@
 
 > Project name: **mY'sTory**. First trip planned with it: Vietnam.
 
-**Live:** [daiswap.github.io/vietnam-trip](https://daiswap.github.io/vietnam-trip/)
+**Live:** [daiswap.github.io/mY-sTory](https://daiswap.github.io/mY-sTory/)
 
 ---
 
@@ -120,8 +120,8 @@ Security:
 ## Running it locally
 
 ```bash
-git clone https://github.com/DaiSwap/vietnam-trip
-cd vietnam-trip
+git clone https://github.com/DaiSwap/mY-sTory
+cd mY-sTory
 python3 -m http.server 8765
 # then open http://localhost:8765
 ```
