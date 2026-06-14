@@ -700,69 +700,70 @@ const ONB_STEPS = [
     type:"text", placeholder:"e.g. Pranav", maxlength:24,
     validate:v => {
       const t = (v||"").trim();
-      if(t.length < 2) return "Real names use at least two letters — first name is fine.";
+      if(t.length < 2) return "Real names use at least two letters.";
       if(!NAME_RX.test(t)) return "Letters, spaces, . ' or - only.";
       const letters = (t.match(/\p{L}/gu) || []).length;
-      if(letters < 2) return "Real names use at least two letters — first name is fine.";
+      if(letters < 2) return "Real names use at least two letters.";
       return true;
     },
     parse:v => v.trim(),
-    err:"Letters, spaces, . ' or - only (2–24 chars)." },
+    err:"Letters, spaces, . ' or - only." },
   { key:"age", q:"How old are you?",
     hint:"Sizes up activity options (easy-rider vs self-drive on the Ha Giang loop, etc.).",
     type:"number", placeholder:"e.g. 28", min:10, max:70,
     validate:v => {
-      if(v === "" || !Number.isInteger(+v)) return "Type your age as a whole number.";
+      if(v === "" || !Number.isInteger(+v)) return "Whole numbers only.";
       const n = +v;
-      if(n < 10) return "Trip planning is a grown-up thing. Ask a parent in your group to set this up.";
-      if(n > 100) return "Either you're the world's oldest traveler or a finger slipped. Try again.";
-      if(n > 70) return "Plenty of life left in you, but Vietnam has rough roads and steep hikes — let a younger planner enter their age and tag along with them.";
+      if(n < 10) return "Too young to plan — ask a parent.";
+      if(n > 100) return "World's oldest traveler, or a typo?";
+      if(n > 70) return "Vietnam has steep hikes — let someone younger plan this.";
       return true;
     },
     parse:v => +v,
-    err:"Type your age as a whole number." },
+    err:"Whole numbers only." },
   { key:"groupSize", q:"How many people in your group?",
     hint:"Including you. Drives accommodation suggestions and cost-per-person totals.",
     type:"number", placeholder:"e.g. 5", min:1, max:12,
     validate:v => {
-      if(v === "" || !Number.isInteger(+v)) return "Type the group size as a whole number.";
+      if(v === "" || !Number.isInteger(+v)) return "Whole numbers only.";
       const n = +v;
-      if(n < 1) return "Group size has to be at least 1.";
-      if(n > 12) return "13+ isn't a trip, it's a tour group. Split into smaller crews and plan separately.";
+      if(n < 1) return "At least 1, please.";
+      if(n > 12) return "13+ is a tour group, not a family trip.";
       return true;
     },
     parse:v => +v,
-    err:"Type a number between 1 and 12." },
+    err:"Whole numbers, 1 to 12." },
   { key:"budgetPP", q:"Per-person budget (₹)?",
     hint:"Total spend per person — flights, hotels, food, activities. We match routes to it.",
     type:"number", placeholder:"e.g. 60000", min:40000, max:200000,
     validate:v => {
-      if(v === "" || !Number.isInteger(+v)) return "Type your budget as a whole rupee amount.";
+      if(v === "" || !Number.isInteger(+v)) return "Whole rupee amount.";
       const n = +v;
-      if(n < 40000) return "Flights alone are ₹20–30k from India, plus visa, plus food and stay. Less than ₹40,000 just isn't possible — bump it up.";
-      if(n > 200000) return "₹2L+ is more than Vietnam needs. Be honest with yourself — the trip will still be great.";
+      if(n < 40000) return "Flights alone cost ~₹25k. Bump it up.";
+      if(n > 200000) return "₹2L+ is more than Vietnam needs. Be realistic.";
       return true;
     },
     parse:v => +v,
-    err:"Type your budget as a whole rupee amount." },
+    err:"Whole rupee amount." },
   { key:"bufferPP", q:"Buffer per person (₹)?",
     hint:"Wiggle room each person has on top of the budget. Used for upgrades or emergencies.",
     type:"number", placeholder:"e.g. 8000", min:5000, max:39999,
     validate:v => {
-      if(v === "" || !Number.isInteger(+v)) return "Type a whole rupee amount.";
+      if(v === "" || !Number.isInteger(+v)) return "Whole rupee amount.";
       const n = +v;
-      if(n < 5000) return "Even small surprises cost money — a missed train, a sudden plan change. ₹5,000 minimum keeps the trip safe.";
-      if(n >= 40000) return "₹40k+ isn't a buffer, it's a second budget. Just add the extra to your main budget.";
+      if(n < 5000) return "₹5k minimum — surprises happen on any trip.";
+      if(n >= 40000) return "That's a second budget. Add it to your main budget.";
       return true;
     },
     parse:v => +v,
-    err:"Type a whole rupee amount." }
+    err:"Whole rupee amount." }
 ];
 
 let _onbIdx = 0;
 let _onbData = {};
 let _pendingVote = null;
 let _lastOnbTrigger = null;
+let _wasInitialSetup = false;
 
 /**
  * Opens the onboarding takeover. Stores the trigger element so focus can be restored on close.
@@ -770,6 +771,7 @@ let _lastOnbTrigger = null;
  */
 function openOnboarding(){
   _lastOnbTrigger = (document.activeElement && document.activeElement !== document.body) ? document.activeElement : null;
+  _wasInitialSetup = !Profile.isComplete();
   _onbData = { ...Profile.get() };
   _onbIdx = 0;
   const card = document.getElementById("onbWrap");
@@ -857,6 +859,10 @@ function onbBack(){
   _onbIdx--; renderOnbStep();
 }
 function onbFinish(){
+  const wasInitial = _wasInitialSetup;
+  const hadPendingVote = !!_pendingVote;
+  _wasInitialSetup = false;
+
   Profile.set(_onbData);
   TripVotes.setName(_onbData.name);
   closeOnboarding();
@@ -865,6 +871,12 @@ function onbFinish(){
   hydrateProfileTokens();      // re-fill any static data-profile placeholders
   applyVoteUI();
   if(_pendingVote){ const {placeId,vote}=_pendingVote; _pendingVote=null; doVote(placeId,vote); }
+
+  // First-time setup lands at the top of the current page so the user sees the hero/intro,
+  // not wherever they happened to be scrolled when they tapped 'Get started'.
+  if(wasInitial && !hadPendingVote){
+    window.scrollTo(0, 0);
+  }
 }
 
 /* voting entry point — now gates on full profile */
@@ -978,6 +990,12 @@ function initMap(){
   const map = L.map("map",{ zoomControl:false, scrollWheelZoom:false, minZoom:5, maxZoom:13 });
   L.control.zoom({position:"topright"}).addTo(map);
   window._mapInstance = map;     // applyVoteUI re-renders the route through this
+  // Labels are hidden by default to keep the map clean; they appear on hover (desktop)
+  // and once the user has zoomed in past level 9 (so each pill has room to breathe).
+  const mapHost = document.getElementById("map");
+  const refreshZoomClass = () => { if(mapHost) mapHost.classList.toggle("zoomed-in", map.getZoom() >= 9); };
+  map.on("zoomend", refreshZoomClass);
+  setTimeout(refreshZoomClass, 0);
   const sat = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",{attribution:"Tiles © Esri",maxZoom:18});
   const labels = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",{maxZoom:18,opacity:0.9});
   const light = L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",{attribution:"© OpenStreetMap, © CARTO",subdomains:"abcd",maxZoom:19});
