@@ -123,7 +123,12 @@ const PLACES = [
     crowd:2, crowdNote:"Kept its soul vs Da Nang", act:3, actNote:"Beaches & coast",
     desc:"Not on the plan — worth a look. A low-key coastal town that stayed authentic while Da Nang boomed.",
     doing:["Quiet beaches (Ky Co, Eo Gio)","Coastal scooter rides","Cham towers","Fresh seafood & local life"],
-    when:"A real swap for a relaxed, non-commercial coast instead of Da Nang." }
+    when:"A real swap for a relaxed, non-commercial coast instead of Da Nang." },
+  { id:"hcmc", tier:3, lat:10.7769, lng:106.7009, region:"South · biggest city", name:"Ho Chi Minh City",
+    crowd:5, crowdNote:"Vietnam's biggest city", act:3, actNote:"Food, history, day trips",
+    desc:"The chaotic, energetic south. Famous for street food, war-history museums and being a gateway to the Mekong Delta. Less <b>quiet</b> than anywhere up north, but it's a real lived-in city — not a tourist-town facade.",
+    doing:["War Remnants Museum & old-Saigon walks","Street-food crawl (Ben Thanh, District 4)","Cu Chi Tunnels day trip","Mekong Delta day or overnight","Rooftop bars & Bui Vien nightlife"],
+    when:"Adds a southern leg — pairs naturally with Mekong Delta, Da Lat or Phu Quoc (3–5 extra days). If you're sticking to north + central, you can skip it." }
 ];
 
 /* ROUTES — curated paths through the shortlist (Phase B)
@@ -362,11 +367,11 @@ const TripVotes = {
 const byId = id => PLACES.find(p=>p.id===id);
 /** Short badge label used on the place cards (places.html). Plain-English replacement
  *  for the internal "tier" nomenclature — visitors don't care what tier means. */
-const tierLabel = t => t === 1 ? "Recommended" : t === 2 ? "Good pick" : "Touristy";
+const tierLabel = t => t === 1 ? "Top pick" : t === 2 ? "Worth visiting" : "Touristy";
 /** Longer descriptor for the detail sheet header. */
-const tierTxt = t => t === 1 ? "Recommended · quiet and activity-rich"
-                   : t === 2 ? "Good pick · one tradeoff"
-                             : "Popular but commercial";
+const tierTxt = t => t === 1 ? "Top pick · quiet and activity-rich"
+                   : t === 2 ? "Worth visiting · one tradeoff"
+                             : "Touristy · popular but commercial";
 const tierCls = t => "tier-"+t;
 function segs(n, cls){ let s=""; for(let i=1;i<=5;i++) s+=`<div class="seg ${i<=n?cls:''}"></div>`; return s; }
 
@@ -993,19 +998,8 @@ function animateCount(el, target, duration = 800){
   requestAnimationFrame(step);
 }
 
-/**
- * Home-page enhancement. Minimal by design — the hero is now CSS-only.
- * Adds a gentle palm parallax on scroll (skipped under reduced-motion / touch).
- */
-function initHero(){
-  if(prefersReducedMotion()) return;
-  const palm = document.querySelector(".hero-bg svg");
-  if(!palm) return;
-  window.addEventListener("scroll", () => {
-    const y = window.scrollY;
-    palm.style.transform = `translateY(${Math.min(y * 0.18, 120)}px)`;
-  }, { passive: true });
-}
+/** Home-page enhancement. Hero is now fully CSS-only — nothing for JS to wire. */
+function initHero(){ /* intentionally empty; reserved for future home-page hooks */ }
 
 /* Routes page — picker + Leaflet polyline + when-to-go strip */
 function initRoutes(){
@@ -1170,7 +1164,8 @@ function hydrateProfileTokens(){
   const p = Profile.get();
   document.querySelectorAll("[data-profile]").forEach(el => {
     const key = el.dataset.profile;
-    if(key === "groupSize" && Number.isFinite(p.groupSize)) el.textContent = `${p.groupSize} ${p.groupSize === 1 ? "of you" : "of you"}`;
+    if(key === "placeCount") el.textContent = String(PLACES.length);
+    else if(key === "groupSize" && Number.isFinite(p.groupSize)) el.textContent = `${p.groupSize} of you`;
     else if(key === "groupSizeAdults" && Number.isFinite(p.groupSize)) el.textContent = `${p.groupSize} ${p.groupSize === 1 ? "adult" : "adults"}`;
     else if(key === "name" && p.name) el.textContent = p.name;
     else if(key === "budgetPP" && Number.isFinite(p.budgetPP)) el.textContent = formatINR(p.budgetPP);
@@ -1196,44 +1191,66 @@ function renderHomeGreeting(){
 
 function initResults(){ renderResults(); }
 /**
- * Renders the results page: ranks all PLACES by score (yes*2 + maybe),
- * shows a stacked vote bar per place plus voter-name chips.
+ * Renders the results page as a horizontal bar chart.
+ * Bar length = each place's score (yes×2 + maybe) as a fraction of the maximum possible
+ * (#voters × 2). The bar is split: green section = yes contribution, amber = maybe.
+ * Counts (✓ ~ ✕) appear to the right; clicking a row opens the place's detail sheet.
  * All voter names are HTML-escaped — Firestore data is treated as untrusted.
  */
 function renderResults(){
-  const host=document.getElementById("results"); if(!host) return;
-  const voters=[...new Set(ALL_VOTES.map(v=>v.name).filter(Boolean))];
+  const host = document.getElementById("results"); if(!host) return;
+  const voters = [...new Set(ALL_VOTES.map(v => v.name).filter(Boolean))];
   animateCount(document.getElementById("voterCount"), voters.length);
 
-  if(ALL_VOTES.length===0){
+  if(ALL_VOTES.length === 0){
     host.innerHTML = `<div class="empty">No votes yet. Open the <a href="map.html" style="color:var(--accent);font-weight:600">map</a> or <a href="places.html" style="color:var(--accent);font-weight:600">places</a> and start voting.</div>`;
     return;
   }
-  const rows = PLACES.map(d=>{
-    const vs = ALL_VOTES.filter(v=>v.placeId===d.id);
-    const yes=vs.filter(v=>v.vote==="yes"), maybe=vs.filter(v=>v.vote==="maybe"), skip=vs.filter(v=>v.vote==="skip");
-    return { d, yes, maybe, skip, score: yes.length*2 + maybe.length };
-  }).sort((a,b)=> b.score-a.score || b.yes.length-a.yes.length);
 
-  host.innerHTML = rows.map((r,i)=>{
-    const total=r.yes.length+r.maybe.length+r.skip.length;
-    const pct=n=> total? (n/total*100):0;
-    const chips=(arr,cls,sym)=>arr.map(v=>`<span class="chip ${cls}">${sym} ${escapeHTML(v.name)}</span>`).join("");
-    const bar = total ? `<div class="stack">
-        <div class="sy" style="width:${pct(r.yes.length)}%"></div>
-        <div class="sm" style="width:${pct(r.maybe.length)}%"></div>
-        <div class="ss" style="width:${pct(r.skip.length)}%"></div>
-      </div>` : `<div class="stack"></div>`;
-    return `<div class="res-row">
-      <div class="top">
-        <div><span class="rk">#${i+1}</span><span class="nm" data-id="${r.d.id}">${r.d.name}</span></div>
-        <div class="score">✓ ${r.yes.length} · ~ ${r.maybe.length} · ✕ ${r.skip.length}</div>
-      </div>
-      ${bar}
-      ${total? `<div class="chips">${chips(r.yes,'cy','✓')}${chips(r.maybe,'cm','~')}${chips(r.skip,'cs','✕')}</div>`:""}
-    </div>`;
-  }).join("");
-  host.querySelectorAll(".nm").forEach(n=>n.addEventListener("click",()=>openSheet(n.dataset.id)));
+  const rows = PLACES.map(d => {
+    const vs = ALL_VOTES.filter(v => v.placeId === d.id);
+    const yes = vs.filter(v => v.vote === "yes");
+    const maybe = vs.filter(v => v.vote === "maybe");
+    const skip = vs.filter(v => v.vote === "skip");
+    return { d, yes, maybe, skip, score: yes.length * 2 + maybe.length };
+  }).sort((a, b) => b.score - a.score || b.yes.length - a.yes.length);
+
+  // Bars are scaled so a place where everyone voted Yes fills the whole track.
+  const numVoters = Math.max(1, voters.length);
+  const maxPossible = numVoters * 2;
+
+  host.innerHTML = `
+    <p class="res-legend">${numVoters === 1
+      ? `Bars show each place's score. Yes counts double; Maybe counts single.`
+      : `Bars show each place's score out of ${maxPossible} possible (${numVoters} voters × 2 pts max for a Yes).`}</p>
+    <div class="res-chart" role="list">
+      ${rows.map((r, i) => {
+        const yesPct = (r.yes.length * 2 / maxPossible) * 100;
+        const maybePct = (r.maybe.length / maxPossible) * 100;
+        return `
+          <div class="res-bar" role="listitem" tabindex="0" data-id="${r.d.id}" aria-label="Rank ${i+1}: ${escapeHTML(r.d.name)}, score ${r.score} of ${maxPossible}, ${r.yes.length} yes, ${r.maybe.length} maybe, ${r.skip.length} skip">
+            <div class="rb-rank">#${i+1}</div>
+            <div class="rb-name">${escapeHTML(r.d.name)}</div>
+            <div class="rb-track">
+              <div class="rb-fill-yes" style="width:${yesPct}%"></div>
+              <div class="rb-fill-maybe" style="width:${maybePct}%;left:${yesPct}%"></div>
+            </div>
+            <div class="rb-counts">
+              <span class="rb-y">&#10003; ${r.yes.length}</span>
+              <span class="rb-m">~ ${r.maybe.length}</span>
+              <span class="rb-s">&#10007; ${r.skip.length}</span>
+            </div>
+          </div>`;
+      }).join("")}
+    </div>
+    ${voters.length ? `<div class="res-voters">Voted: ${voters.map(v => `<b>${escapeHTML(v)}</b>`).join(" &middot; ")}</div>` : ""}`;
+
+  host.querySelectorAll(".res-bar").forEach(el => {
+    el.addEventListener("click", () => openSheet(el.dataset.id));
+    el.addEventListener("keydown", e => {
+      if(e.key === "Enter" || e.key === " "){ e.preventDefault(); openSheet(el.dataset.id); }
+    });
+  });
 }
 
 /* ============================================================

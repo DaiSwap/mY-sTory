@@ -101,15 +101,13 @@ body.reveal-fallback .reveal:not(.in){opacity:1;transform:none;transition:opacit
    ============================================================ */
 .hero{
   position:relative;overflow:hidden;
-  min-height:calc(82svh - var(--nav-h));
+  min-height:calc(76svh - var(--nav-h));
   display:flex;flex-direction:column;align-items:center;justify-content:center;
   text-align:center;
   padding:72px 24px 100px;
   background:linear-gradient(180deg,#fffdf9 0%,#fff7ec 100%);
 }
-.hero-bg{position:absolute;inset:0;z-index:0;pointer-events:none;display:flex;align-items:center;justify-content:center}
-.hero-bg svg{width:min(380px,52vw);height:auto;opacity:.06}
-.hero::after{content:"";position:absolute;inset:0;background:radial-gradient(70% 60% at 50% 40%,rgba(194,98,47,0.06),transparent 70%);z-index:0;pointer-events:none}
+.hero::after{content:"";position:absolute;inset:0;background:radial-gradient(70% 60% at 50% 40%,rgba(194,98,47,0.05),transparent 75%);z-index:0;pointer-events:none}
 .hero > *{position:relative;z-index:1}
 
 .eyebrow{
@@ -309,21 +307,46 @@ body.reveal-fallback .reveal:not(.in){opacity:1;transform:none;transition:opacit
 .res-meta .dot-live{width:9px;height:9px;border-radius:50%;background:var(--yes);box-shadow:0 0 0 0 rgba(31,157,87,.5);animation:livedot 1.6s infinite}
 @keyframes livedot{0%{box-shadow:0 0 0 0 rgba(31,157,87,.5)}70%{box-shadow:0 0 0 8px rgba(31,157,87,0)}100%{box-shadow:0 0 0 0 rgba(31,157,87,0)}}
 .res-list{margin-top:26px;display:flex;flex-direction:column;gap:12px}
-.res-row{border:1px solid var(--hair);border-radius:16px;padding:18px 20px;background:var(--bg);transition:.25s}
-.res-row:hover{box-shadow:0 16px 40px -22px rgba(0,0,0,0.25)}
-.res-row .top{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:12px}
-.res-row .rk{font-size:13px;font-weight:700;color:var(--ink-3);margin-right:10px}
-.res-row .nm{font-size:20px;font-weight:700;letter-spacing:-.02em;cursor:pointer}
-.res-row .nm:hover{color:var(--accent)}
-.res-row .score{font-size:13px;color:var(--ink-2);font-weight:600;white-space:nowrap}
-.stack{display:flex;height:12px;border-radius:6px;overflow:hidden;background:rgba(0,0,0,0.06)}
-.stack .sy{background:var(--yes)} .stack .sm{background:var(--maybe)} .stack .ss{background:var(--skip)}
-.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
-.chip{font-size:11.5px;font-weight:600;padding:3px 10px;border-radius:100px;border:1px solid var(--hair)}
-.chip.cy{color:var(--yes);background:rgba(31,157,87,0.08)}
-.chip.cm{color:var(--maybe);background:rgba(207,138,0,0.10)}
-.chip.cs{color:var(--skip);background:rgba(194,80,58,0.08)}
 .empty{color:var(--ink-3);text-align:center;padding:60px 20px;font-size:16px}
+
+/* Horizontal-bar results chart: place name + a track filled by yes (green) and maybe (amber). */
+.res-legend{margin:18px 0 22px;text-align:center;font-size:13.5px;color:var(--ink-2)}
+.res-chart{display:flex;flex-direction:column;gap:10px}
+.res-bar{
+  display:grid;
+  grid-template-columns:48px minmax(0,1.4fr) minmax(0,3fr) minmax(0,140px);
+  align-items:center;gap:14px;
+  padding:14px 18px;
+  background:var(--bg);border:1px solid var(--hair);border-radius:14px;
+  cursor:pointer;transition:transform .2s ease,box-shadow .25s ease,border-color .2s ease;
+}
+.res-bar:hover{border-color:rgba(0,0,0,0.18);box-shadow:0 4px 16px rgba(0,0,0,0.06);transform:translateY(-1px)}
+.res-bar:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.rb-rank{font-size:13px;font-weight:700;color:var(--ink-3);letter-spacing:.04em}
+.rb-name{font-size:15.5px;font-weight:600;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rb-track{position:relative;height:24px;background:var(--bg-2);border-radius:8px;overflow:hidden}
+.rb-fill-yes,.rb-fill-maybe{position:absolute;top:0;bottom:0;border-radius:8px;transition:width .55s cubic-bezier(.2,.7,.2,1),left .55s cubic-bezier(.2,.7,.2,1)}
+.rb-fill-yes{left:0;background:var(--yes)}
+.rb-fill-maybe{background:var(--maybe);border-radius:0 8px 8px 0}
+.rb-counts{display:flex;gap:10px;font-size:13px;font-weight:600;white-space:nowrap;justify-content:flex-end}
+.rb-y{color:var(--yes)} .rb-m{color:var(--maybe)} .rb-s{color:var(--ink-3)}
+.res-voters{margin-top:28px;padding:14px 18px;text-align:center;background:var(--bg-2);border-radius:12px;font-size:14px;color:var(--ink-2);line-height:1.6}
+.res-voters b{color:var(--ink);font-weight:600}
+
+@media(max-width:680px){
+  .res-bar{
+    grid-template-columns:34px minmax(0,1fr);
+    grid-template-areas:
+      "rank name"
+      "bar bar"
+      "counts counts";
+    gap:6px 10px;padding:14px 16px;
+  }
+  .rb-rank{grid-area:rank;font-size:12px}
+  .rb-name{grid-area:name;font-size:14.5px}
+  .rb-track{grid-area:bar;height:20px}
+  .rb-counts{grid-area:counts;justify-content:flex-start;font-size:12.5px}
+}
 
 
 /* ---------- travel page: info cards + tables ---------- */
