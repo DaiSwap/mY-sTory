@@ -669,7 +669,6 @@ body.reveal-fallback .reveal:not(.in){opacity:1;transform:none;transition:opacit
 
 /* Route polyline — JS sets stroke-dasharray / dashoffset inline.
    Class only used to opt into the transition. */
-.leaflet-overlay-pane svg path.route-line{transition:stroke-dashoffset 1.2s cubic-bezier(.5,0,.2,1)}
 
 /* Onboarding step transitions */
 .onb-stepbody{will-change:transform,opacity}
