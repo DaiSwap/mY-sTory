@@ -877,93 +877,17 @@ function animateCount(el, target, duration = 800){
 }
 
 /**
- * Home-page hero choreography:
- * - sets stagger index on each letter and triggers the entrance via body.hero-in
- * - generates the place-name marquee from PLACES
- * - wires magnetic CTAs and the desktop cursor follower
- * - adds gentle parallax to the palm SVG on scroll
- * - applies 3D tilt to .tile cards on hover
+ * Home-page enhancement. Minimal by design — the hero is now CSS-only.
+ * Adds a gentle palm parallax on scroll (skipped under reduced-motion / touch).
  */
 function initHero(){
-  const reduced = prefersReducedMotion();
-
-  // Letter stagger — assign --i so the CSS animation delay staggers per letter.
-  // (The animation itself is fully CSS-driven via `both` fill, so even if this
-  //  fails or the script never runs, the title still reveals.)
-  const main = document.querySelector(".ht-main");
-  if(main){
-    Array.from(main.children).forEach((el, i) => el.style.setProperty("--i", String(i)));
-  }
-
-  // Marquee — built from PLACES so it always reflects the current shortlist.
-  const track = document.getElementById("hm-track");
-  if(track){
-    const names = [...new Set(PLACES.map(p => p.name))];
-    const one = names.map(n => `<span class="hm-name">${escapeHTML(n)}</span><span class="hm-sep">·</span>`).join("");
-    track.innerHTML = one + one; // duplicate makes the loop seamless
-  }
-
-  // Magnetic CTAs (desktop only)
-  if(!isTouchPointer() && !reduced){
-    document.querySelectorAll("[data-magnetic]").forEach(el => {
-      el.addEventListener("mousemove", e => {
-        const r = el.getBoundingClientRect();
-        const mx = e.clientX - (r.left + r.width / 2);
-        const my = e.clientY - (r.top + r.height / 2);
-        el.style.transform = `translate(${mx * 0.18}px, ${my * 0.25}px)`;
-      });
-      el.addEventListener("mouseleave", () => { el.style.transform = ""; });
-    });
-  }
-
-  // Cursor follower (desktop only, secondary to the OS cursor)
-  if(!isTouchPointer() && !reduced){
-    const cur = document.createElement("div");
-    cur.className = "hero-cursor";
-    cur.setAttribute("aria-hidden", "true");
-    document.body.appendChild(cur);
-    let tx = 0, ty = 0, x = 0, y = 0;
-    document.addEventListener("mousemove", e => { tx = e.clientX; ty = e.clientY; cur.classList.add("on"); });
-    document.addEventListener("mouseleave", () => cur.classList.remove("on"));
-    document.querySelectorAll("a,button,[data-magnetic]").forEach(el => {
-      el.addEventListener("mouseenter", () => cur.classList.add("over"));
-      el.addEventListener("mouseleave", () => cur.classList.remove("over"));
-    });
-    (function loop(){
-      x += (tx - x) * 0.22;
-      y += (ty - y) * 0.22;
-      cur.style.transform = `translate3d(${x}px, ${y}px, 0) translate(-50%, -50%)`;
-      requestAnimationFrame(loop);
-    })();
-  }
-
-  // Palm parallax — gentle translate as the page scrolls.
+  if(prefersReducedMotion()) return;
   const palm = document.querySelector(".hero-bg svg");
-  if(palm && !reduced){
-    window.addEventListener("scroll", () => {
-      const y = window.scrollY;
-      palm.style.transform = `translateY(${Math.min(y * 0.3, 220)}px)`;
-    }, { passive: true });
-  }
-
-  // 3D tilt on home tiles (desktop only)
-  if(!isTouchPointer() && !reduced){
-    document.querySelectorAll(".tile").forEach(t => {
-      t.addEventListener("mousemove", e => {
-        const r = t.getBoundingClientRect();
-        const mx = (e.clientX - r.left) / r.width - 0.5;
-        const my = (e.clientY - r.top) / r.height - 0.5;
-        t.style.setProperty("--tx", `${mx * 6}deg`);
-        t.style.setProperty("--ty", `${-my * 6}deg`);
-        t.classList.add("tilt");
-      });
-      t.addEventListener("mouseleave", () => {
-        t.classList.remove("tilt");
-        t.style.removeProperty("--tx");
-        t.style.removeProperty("--ty");
-      });
-    });
-  }
+  if(!palm) return;
+  window.addEventListener("scroll", () => {
+    const y = window.scrollY;
+    palm.style.transform = `translateY(${Math.min(y * 0.18, 120)}px)`;
+  }, { passive: true });
 }
 
 /* Routes page — picker + Leaflet polyline + when-to-go strip */
