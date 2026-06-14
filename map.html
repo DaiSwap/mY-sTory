@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Map · Vietnam '26</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body data-page="map">
+
+<section class="section center" style="padding-bottom:0">
+  <div class="wrap">
+    <div class="tag reveal">The shortlist · on the real map</div>
+    <h2 class="reveal">Eleven points, north to south.</h2>
+    <p class="sub reveal">Tap any point to see why it made the list, what you'd do there, and to cast your vote. Drag to explore; pinch or use + / − to zoom. Your picks colour the markers.</p>
+  </div>
+</section>
+
+<section class="section" style="padding-top:34px">
+  <div class="wrap">
+    <div class="map-frame reveal">
+      <div class="map-controls">
+        <button id="b-sat" class="on">Satellite</button>
+        <button id="b-light">Map</button>
+      </div>
+      <div class="legend">
+        <div class="row"><span class="sw sw-yes"></span> Yes</div>
+        <div class="row"><span class="sw sw-maybe"></span> Maybe</div>
+        <div class="row"><span class="sw sw-skip"></span> Skip</div>
+        <div class="row"><span class="sw sw-none"></span> Not voted</div>
+      </div>
+      <div id="map"></div>
+    </div>
+  </div>
+</section>
+
+<div class="foot">
+  Tap a marker to vote. Results combine on the <a href="results.html" style="color:var(--accent);font-weight:600">results page</a>. Map imagery © Esri & OpenStreetMap.
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

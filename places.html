@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Places · Vietnam '26</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body data-page="places">
+
+<section class="section center" style="padding-bottom:0">
+  <div class="wrap">
+    <div class="tag reveal">Compare side by side</div>
+    <h2 class="reveal">Every place, in one view.</h2>
+    <p class="sub reveal">Same ratings, same voting. The chart plots all eleven on your two axes — the top-right is quiet <em>and</em> full of things to do.</p>
+  </div>
+</section>
+
+<section class="section" style="padding-top:20px">
+  <div class="wrap">
+    <div class="chart-card reveal">
+      <h3>Crowd × Activity</h3>
+      <div class="note">Each dot is a place. Higher = quieter, further right = more to do. Tap a dot for details.</div>
+      <div id="chart"></div>
+    </div>
+    <div class="grid" id="grid"></div>
+  </div>
+</section>
+
+<div class="foot">
+  Tap any card's vote buttons, or open details. See everyone's combined picks on the <a href="results.html" style="color:var(--accent);font-weight:600">results page</a>.
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
