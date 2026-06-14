@@ -1153,7 +1153,7 @@ function buildChart(){
     const labX = labLeft ? it.px - 14 : it.px + 14;
     const labY = it.py + 4 + it.labDY;
     pts += `<g class="pt-g">
-      <circle class="pt" cx="${it.px}" cy="${it.py}" r="7" fill="${it.col}" data-id="${it.d.id}"></circle>
+      <circle class="pt" cx="${it.px}" cy="${it.py}" r="7" fill="${it.col}" stroke="transparent" stroke-width="30" data-id="${it.d.id}"></circle>
       <line class="ptline" x1="${it.px}" y1="${it.py}" x2="${labLeft ? labX + 4 : labX - 4}" y2="${labY - 3}" stroke="rgba(0,0,0,0.12)" stroke-width="1"></line>
       <text class="ptlab" x="${labX}" y="${labY}" text-anchor="${labLeft ? 'end' : 'start'}">${escapeHTML(it.d.name)}</text>
     </g>`;
