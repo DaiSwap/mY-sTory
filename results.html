@@ -3,6 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src https://fonts.gstatic.com; img-src 'self' data: https://server.arcgisonline.com https://*.basemaps.cartocdn.com https://*.tile.openstreetmap.org https://*.gstatic.com; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://firestore.googleapis.com wss://*.firebaseio.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
 <title>Results · Vietnam '26</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -16,15 +18,12 @@
     <div class="tag reveal">The group decides</div>
     <h2 class="reveal">Live results.</h2>
     <p class="sub reveal">Ranked by what everyone wants most — two points for a Yes, one for a Maybe. Updates the moment anyone votes.</p>
-    <div class="res-meta reveal"><span class="dot-live"></span> <span><b id="voterCount">0</b> people have voted so far</span></div>
+    <div class="res-meta reveal" aria-live="polite" aria-atomic="true"><span class="dot-live" aria-hidden="true"></span> <span><b id="voterCount">0</b> people have voted so far</span></div>
   </div>
 </section>
 
 <section class="section" style="padding-top:18px">
   <div class="wrap">
-    <div class="banner" id="liveBanner" style="display:none">
-      <b>Local mode.</b> Votes are saving on this device only. Once the Firebase config is added, this page shows everyone's votes together, live.
-    </div>
     <div class="res-list" id="results"></div>
   </div>
 </section>

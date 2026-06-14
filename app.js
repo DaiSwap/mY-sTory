@@ -3,7 +3,67 @@
    ------------------------------------------------------------
    EDIT CONTENT in the PLACES array below.
    PASTE your Firebase config in firebaseConfig (see setup notes).
+
+   Layout in this file:
+     0) LOG + escapeHTML primitives (used everywhere; declared first)
+     1) PLACES, ROUTES, WHEN data
+     2) Firebase config + init
+     3) PROFILE (localStorage) + ONBOARDING
+     4) TripVotes (Firestore live / localStorage fallback)
+     5) Shared UI: nav, onboarding card, detail sheet
+     6) Page inits: map, places, routes, results
+     7) Boot
    ============================================================ */
+
+/* ============================================================
+   0) LOG — structured, persisted error trail.
+   Keeps the last 50 entries in localStorage.tripLog so problems
+   are inspectable later. Open DevTools and run `Log.dump()`.
+   ============================================================ */
+const Log = (() => {
+  const KEY = "tripLog";
+  const MAX = 50;
+  const read = () => {
+    try { const v = JSON.parse(localStorage.getItem(KEY)); return Array.isArray(v) ? v : []; }
+    catch { return []; }
+  };
+  const write = arr => { try { localStorage.setItem(KEY, JSON.stringify(arr.slice(-MAX))); } catch {} };
+  /** Push one entry; mirror to console; drop oldest beyond MAX. */
+  const push = (level, tag, msg, extra) => {
+    const entry = {
+      t: new Date().toISOString(),
+      level, tag: String(tag||""),
+      msg: msg == null ? "" : (msg.message || String(msg)),
+      extra: extra == null ? null : (typeof extra === "string" ? extra : JSON.stringify(extra).slice(0,400))
+    };
+    const buf = read(); buf.push(entry); write(buf);
+    const fn = level === "error" ? console.error : level === "warn" ? console.warn : console.info;
+    fn(`[${entry.t}] [${level.toUpperCase()}] ${entry.tag}: ${entry.msg}`, extra || "");
+  };
+  return {
+    /** Info-level log. */                                  info:  (tag,msg,extra) => push("info",  tag, msg, extra),
+    /** Warning-level log. */                               warn:  (tag,msg,extra) => push("warn",  tag, msg, extra),
+    /** Error-level log. */                                 error: (tag,msg,extra) => push("error", tag, msg, extra),
+    /** Returns all persisted entries (most-recent last). */dump:  () => read(),
+    /** Clears the persisted log. */                        clear: () => { try { localStorage.removeItem(KEY); } catch {} }
+  };
+})();
+window.Log = Log; // exposed deliberately for DevTools inspection
+
+/**
+ * Escapes a string so it is safe to insert into HTML via innerHTML or template literals.
+ * Always run user-provided values through this before rendering — defence in depth alongside
+ * input validation and Firestore rules.
+ */
+function escapeHTML(s){
+  if(s == null) return "";
+  return String(s)
+    .replace(/&/g,"&amp;")
+    .replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;")
+    .replace(/'/g,"&#39;");
+}
 
 /* ============================================================
    1) DATA  — edit place info here
@@ -66,6 +126,50 @@ const PLACES = [
     when:"A real swap for a relaxed, non-commercial coast instead of Da Nang." }
 ];
 
+/* ROUTES — curated paths through the shortlist (Phase B)
+   stops carry per-stop nights so the leg list reads cleanly. */
+const ROUTES = [
+  { id:"north-loop", name:"Northern Loop", days:11,
+    note:"Maximises the north's tier-1 picks. Fly in/out of Hanoi — simplest visa & cheapest fares.",
+    stops:[
+      { id:"hanoi",    nights:1 },
+      { id:"ninhbinh", nights:2 },
+      { id:"puluong",  nights:2 },
+      { id:"hagiang",  nights:3 },
+      { id:"catba",    nights:2 },
+      { id:"hanoi",    nights:1 }
+    ] },
+  { id:"open-jaw", name:"North + Central (open-jaw)", days:15,
+    note:"The full trip per the travel page recommendation — in Hanoi, out Da Nang. One e-visa, no backtracking.",
+    stops:[
+      { id:"hanoi",    nights:1 },
+      { id:"ninhbinh", nights:2 },
+      { id:"puluong",  nights:2 },
+      { id:"hagiang",  nights:3 },
+      { id:"catba",    nights:2 },
+      { id:"phongnha", nights:2 },
+      { id:"hue",      nights:1 },
+      { id:"hoian",    nights:2 }
+    ] },
+  { id:"quiet-adv", name:"Quiet + Adventure (tier-1 focus)", days:10,
+    note:"Skips the busiest stops. Every place is tier 1 or 2 — adventure-heavy, crowd-light.",
+    stops:[
+      { id:"hanoi",    nights:1 },
+      { id:"puluong",  nights:2 },
+      { id:"hagiang",  nights:3 },
+      { id:"phongnha", nights:2 },
+      { id:"quynhon",  nights:2 }
+    ] }
+];
+
+/* WHEN — static climate suitability by region × month.
+   Scale 1=avoid, 2=okay, 3=good, 4=excellent. */
+const WHEN = [
+  { region:"North",   months:[2,2,3,3,2,1,1,1,3,4,4,3] },
+  { region:"Central", months:[2,3,4,4,4,2,1,1,1,1,2,2] },
+  { region:"South",   months:[4,4,3,3,2,1,1,1,2,2,3,4] }
+];
+
 /* ============================================================
    2) FIREBASE / VOTING LAYER
    ------------------------------------------------------------
@@ -90,21 +194,126 @@ const firebaseConfig = {
 
 const FB_READY = typeof firebase !== "undefined" && firebaseConfig.apiKey && firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
 let _db = null;
-if (FB_READY) { try { firebase.initializeApp(firebaseConfig); _db = firebase.firestore(); } catch(e){ console.warn("Firebase init failed", e); } }
+if (FB_READY) {
+  try { firebase.initializeApp(firebaseConfig); _db = firebase.firestore(); Log.info("Firebase", "initialised"); }
+  catch (e) { Log.error("Firebase", "init failed", e); }
+}
 
+/** Whitelist of valid vote values — matches Firestore rule. */
+const VALID_VOTES = ["yes","maybe","skip"];
+
+/**
+ * Sanitises one vote document read from Firestore. Discards anything malformed
+ * so the UI never sees a tampered/bad row. Returns null for invalid entries.
+ */
+function sanitiseVote(raw){
+  if(!raw || typeof raw !== "object") return null;
+  const name = typeof raw.name === "string" ? raw.name.slice(0,24) : null;
+  const placeId = typeof raw.placeId === "string" ? raw.placeId : null;
+  const vote = VALID_VOTES.includes(raw.vote) ? raw.vote : null;
+  if(!name || !placeId || !vote) return null;
+  if(!NAME_RX.test(name)) return null;
+  if(!PLACES.some(p => p.id === placeId)) return null;
+  return { name, placeId, vote };
+}
+
+/* ============================================================
+   PROFILE — story-first onboarding state.
+   Shape: { name, age, groupSize, budgetPP, bufferPP }
+   Stored as JSON in localStorage. Every read validates strictly
+   so a tampered/corrupt value gracefully falls back to "missing"
+   and the user is re-prompted — the app never trusts raw input.
+   ============================================================ */
+const PROFILE_KEY = "tripProfile";
+/** Allowed name shape: 1–24 chars, letters / digits / space / .'- (Unicode letters allowed). */
+const NAME_RX = /^[\p{L}\p{N} .'\-]{1,24}$/u;
+
+const Profile = {
+  /** Reads, validates and returns the profile (or `{}` if missing/invalid). */
+  get(){
+    let raw;
+    try { raw = JSON.parse(localStorage.getItem(PROFILE_KEY)); }
+    catch (e) {
+      Log.warn("Profile.get", "JSON parse failed; clearing", e);
+      try { localStorage.removeItem(PROFILE_KEY); } catch {}
+      return {};
+    }
+    if(!raw || typeof raw !== "object") return {};
+    const p = {};
+    if(typeof raw.name === "string" && NAME_RX.test(raw.name)) p.name = raw.name;
+    if(Number.isInteger(raw.age) && raw.age >= 13 && raw.age <= 99) p.age = raw.age;
+    if(Number.isInteger(raw.groupSize) && raw.groupSize >= 1 && raw.groupSize <= 20) p.groupSize = raw.groupSize;
+    if(Number.isInteger(raw.budgetPP) && raw.budgetPP >= 0 && raw.budgetPP <= 5000000) p.budgetPP = raw.budgetPP;
+    if(Number.isInteger(raw.bufferPP) && raw.bufferPP >= 0 && raw.bufferPP <= 5000000) p.bufferPP = raw.bufferPP;
+    return p;
+  },
+  /** Writes the profile. Caller is responsible for validation (onboarding uses ONB_STEPS validators). */
+  set(p){
+    try { localStorage.setItem(PROFILE_KEY, JSON.stringify(p)); }
+    catch (e) { Log.error("Profile.set", "write failed", e); }
+  },
+  /** True when every required field is present and valid. */
+  isComplete(){
+    const p = this.get();
+    return !!(p.name && Number.isFinite(p.age) && Number.isFinite(p.groupSize)
+              && Number.isFinite(p.budgetPP) && Number.isFinite(p.bufferPP));
+  }
+};
+
+/**
+ * TripVotes — the voting layer.
+ * Uses Firestore (collection "votes") when Firebase is configured; falls back to localStorage
+ * so a single device still works offline. Every value read from either store is validated
+ * via sanitiseVote() before reaching the UI.
+ */
 const TripVotes = {
+  /** True when Firestore is wired up; false when running on localStorage only. */
   live: !!_db,
-  name(){ return localStorage.getItem("tripName") || ""; },
-  setName(n){ localStorage.setItem("tripName", (n||"").trim()); },
-  _lk:"tripVotes_local",
-  _getLocal(){ try{ return JSON.parse(localStorage.getItem(this._lk)) || {}; }catch{ return {}; } },
-  _setLocal(o){ localStorage.setItem(this._lk, JSON.stringify(o)); },
+  /** Returns the current user's name, or "" if not set yet. */
+  name(){ return Profile.get().name || localStorage.getItem("tripName") || ""; },
+  /**
+   * Sets the user's first name. The onboarding flow already validates; this is the persistence step.
+   * Updates both the canonical Profile and the legacy `tripName` key (kept for backwards
+   * compatibility with older localStorage data).
+   */
+  setName(n){
+    const trimmed = (n || "").trim();
+    if(!NAME_RX.test(trimmed)){ Log.warn("TripVotes.setName", "rejected invalid name"); return; }
+    const p = Profile.get(); p.name = trimmed; Profile.set(p);
+    try { localStorage.setItem("tripName", trimmed); } catch (e) { Log.warn("TripVotes.setName", "tripName write failed", e); }
+  },
+
+  _lk: "tripVotes_local",
+  /** Reads the local-mode votes dictionary `{placeId: vote}`. Returns `{}` on any error. */
+  _getLocal(){
+    try {
+      const o = JSON.parse(localStorage.getItem(this._lk));
+      return (o && typeof o === "object") ? o : {};
+    } catch (e) { Log.warn("TripVotes._getLocal", "parse failed; resetting", e); return {}; }
+  },
+  /** Writes the local-mode votes dictionary. */
+  _setLocal(o){
+    try { localStorage.setItem(this._lk, JSON.stringify(o)); }
+    catch (e) { Log.error("TripVotes._setLocal", "write failed", e); }
+  },
+
+  /**
+   * Casts or clears a vote for the current user. Pass `null`/falsy `vote` to clear.
+   * @param {string} placeId
+   * @param {"yes"|"maybe"|"skip"|null} vote
+   */
   async cast(placeId, vote){
-    const name = this.name(); if(!name) return;
+    const name = this.name();
+    if(!name){ Log.warn("TripVotes.cast", "no name set"); return; }
+    if(!PLACES.some(p => p.id === placeId)){ Log.warn("TripVotes.cast", "unknown placeId", placeId); return; }
+    if(vote != null && !VALID_VOTES.includes(vote)){ Log.warn("TripVotes.cast", "bad vote value", vote); return; }
+
     if(_db){
-      const ref = _db.collection("votes").doc(name.toLowerCase()+"__"+placeId);
-      if(vote) await ref.set({ name, placeId, vote, ts: Date.now() });
-      else await ref.delete();
+      try {
+        const ref = _db.collection("votes").doc(name.toLowerCase() + "__" + placeId);
+        if(vote) await ref.set({ name, placeId, vote, ts: Date.now() });
+        else await ref.delete();
+      } catch (e) { Log.error("TripVotes.cast", "Firestore write failed", e); }
     } else {
       const o = this._getLocal();
       if(vote) o[placeId] = vote; else delete o[placeId];
@@ -112,23 +321,38 @@ const TripVotes = {
       this._emitLocal();
     }
   },
+
+  /**
+   * Subscribes to live vote updates. The callback receives an array of sanitised
+   * `{name, placeId, vote}` objects. Returns an unsubscribe function.
+   */
   subscribe(cb){
     this._cb = cb;
     if(_db){
-      return _db.collection("votes").onSnapshot(snap=>{
-        const arr=[]; snap.forEach(d=>arr.push(d.data())); cb(arr);
-      }, err=>console.warn("votes subscribe error", err));
+      return _db.collection("votes").onSnapshot(snap => {
+        const arr = [];
+        snap.forEach(d => {
+          const v = sanitiseVote(d.data());
+          if(v) arr.push(v); else Log.warn("TripVotes.subscribe", "dropped invalid vote doc", d.id);
+        });
+        cb(arr);
+      }, err => Log.error("TripVotes.subscribe", "Firestore listener error", err));
     } else {
       this._emitLocal();
-      window.addEventListener("storage", e=>{ if(e.key===this._lk) this._emitLocal(); });
-      return ()=>{};
+      window.addEventListener("storage", e => { if(e.key === this._lk) this._emitLocal(); });
+      return () => {};
     }
   },
+
+  /** Emits the local-mode votes into the subscriber callback (no-op if no subscriber). */
   _emitLocal(){
     if(!this._cb) return;
     const name = this.name() || "You";
     const o = this._getLocal();
-    this._cb(Object.entries(o).map(([placeId,vote])=>({ name, placeId, vote })));
+    const arr = Object.entries(o)
+      .map(([placeId, vote]) => sanitiseVote({ name, placeId, vote }))
+      .filter(Boolean);
+    this._cb(arr);
   }
 };
 
@@ -154,6 +378,21 @@ function myVotes(){
 function injectChrome(){
   const page = document.body.dataset.page || "";
   const link = (href,label,key)=>`<a href="${href}" class="${page===key?'active':''}">${label}</a>`;
+
+  /* Skip-to-content link — first focusable element on every page (a11y). */
+  const firstSection = document.querySelector("body > section");
+  if(firstSection && !firstSection.id) firstSection.id = "main-content";
+  const skip = document.createElement("a");
+  skip.className = "skip-link";
+  skip.href = "#main-content";
+  skip.textContent = "Skip to main content";
+  skip.addEventListener("click", e => {
+    e.preventDefault();
+    const target = document.getElementById("main-content");
+    if(target){ target.setAttribute("tabindex","-1"); target.focus({preventScroll:false}); target.scrollIntoView({behavior:"smooth",block:"start"}); }
+  });
+  document.body.prepend(skip);
+
   const nav = document.createElement("div");
   nav.className="nav";
   nav.innerHTML = `
@@ -163,40 +402,55 @@ function injectChrome(){
       ${link("index.html","Home","home")}
       ${link("map.html","Map","map")}
       ${link("places.html","Places","places")}
+      ${link("routes.html","Routes","routes")}
       ${link("travel.html","Travel","travel")}
       ${link("results.html","Results","results")}
     </div>
     <div class="spacer"></div>
     <div class="me">
-      <span class="tally"><span class="ty">✓ <b id="t-yes">0</b></span><span class="tm">~ <b id="t-maybe">0</b></span><span class="ts">✕ <b id="t-skip">0</b></span></span>
-      <button class="who" id="whoBtn"></button>
+      <span class="tally" aria-label="Your votes" aria-live="polite" aria-atomic="true"><span class="ty">✓ <b id="t-yes">0</b></span><span class="tm">~ <b id="t-maybe">0</b></span><span class="ts">✕ <b id="t-skip">0</b></span></span>
+      <button class="who" id="whoBtn" aria-label="Edit your profile"></button>
     </div>`;
   document.body.prepend(nav);
 
   document.getElementById("burger").addEventListener("click",()=>{
     document.getElementById("navlinks").classList.toggle("open");
   });
-  document.getElementById("whoBtn").addEventListener("click",()=>openName(true));
-  refreshWho();
+  document.getElementById("whoBtn").addEventListener("click",()=>openOnboarding());
+  refreshNav();
 
-  // name modal
-  const mw = document.createElement("div");
-  mw.className="modal-wrap"; mw.id="nameModal";
-  mw.innerHTML = `
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="nm-t">
-      <h3 id="nm-t">What's your first name?</h3>
-      <p>So your family can see who voted for what. Stored only on this device.</p>
-      <input id="nameInput" type="text" placeholder="e.g. Pranav" maxlength="24" autocomplete="given-name">
-      <div class="row">
-        <button class="m-cancel" id="nameCancel">Cancel</button>
-        <button class="m-ok" id="nameOk">Save</button>
+  /* onboarding takeover (multi-step story) */
+  const ow = document.createElement("div");
+  ow.className = "onb-wrap"; ow.id = "onbWrap";
+  ow.innerHTML = `
+    <div class="onb-card" role="dialog" aria-modal="true" aria-labelledby="onb-q">
+      <button class="onb-close" id="onb-close" aria-label="Save and close" title="Save and close">×</button>
+      <div class="onb-brand">Vietnam <span>'26</span></div>
+      <div class="onb-progress"><div class="onb-bar" id="onb-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100"></div></div>
+      <div class="onb-stepbody" id="onb-stepbody">
+        <div class="onb-step" id="onb-step"></div>
+        <h2 class="onb-q" id="onb-q"></h2>
+        <p class="onb-hint" id="onb-hint"></p>
+        <input id="onb-input" class="onb-input" autocomplete="off" aria-labelledby="onb-q" aria-describedby="onb-hint onb-err">
+        <div class="onb-err" id="onb-err" aria-live="polite"></div>
       </div>
+      <div class="onb-actions">
+        <button class="onb-back" id="onb-back">← Back</button>
+        <button class="onb-next" id="onb-next">Next →</button>
+      </div>
+      <div class="onb-foot">Saved only on your device. Never uploaded.</div>
     </div>`;
-  document.body.appendChild(mw);
-  document.getElementById("nameCancel").addEventListener("click",()=>closeName());
-  document.getElementById("nameOk").addEventListener("click",()=>saveName());
-  document.getElementById("nameInput").addEventListener("keydown",e=>{ if(e.key==="Enter") saveName(); });
-  mw.addEventListener("click",e=>{ if(e.target===mw) closeName(); });
+  document.body.appendChild(ow);
+  document.getElementById("onb-next").addEventListener("click", onbNext);
+  document.getElementById("onb-back").addEventListener("click", onbBack);
+  document.getElementById("onb-close").addEventListener("click", () => closeOnboarding(true));
+  document.getElementById("onb-input").addEventListener("keydown", e => { if(e.key === "Enter") onbNext(); });
+  // Clear the error message as soon as the user starts editing again.
+  document.getElementById("onb-input").addEventListener("input", () => {
+    const err = document.getElementById("onb-err"); if(err && err.textContent) err.textContent = "";
+  });
+  // Focus trap is now handled by the document-level Tab listener below
+  // (this comment kept so onboarding flow remains discoverable to future readers).
 
   // detail sheet
   const scrim = document.createElement("div"); scrim.className="scrim"; scrim.id="scrim";
@@ -204,35 +458,199 @@ function injectChrome(){
   sheet.innerHTML = `<div id="sheet-body"></div>`;
   document.body.appendChild(scrim); document.body.appendChild(sheet);
   scrim.addEventListener("click",closeSheet);
-  document.addEventListener("keydown",e=>{ if(e.key==="Escape"){ closeSheet(); closeName(); } });
+  /* Escape: close whichever overlay is open. Never blindly call closeOnboarding,
+     which could otherwise persist stale input from a non-open onboarding card. */
+  document.addEventListener("keydown", e => {
+    if(e.key !== "Escape") return;
+    const sheet = document.getElementById("sheet");
+    const onb = document.getElementById("onbWrap");
+    if(sheet && sheet.classList.contains("on")) closeSheet();
+    if(onb && onb.classList.contains("on") && Profile.isComplete()) closeOnboarding(true);
+  });
+
+  /* Document-level Tab trap. Catches Tab key even when focus has escaped the modal
+     (e.g. onto the skip-link), and pulls focus back inside whichever overlay is active. */
+  document.addEventListener("keydown", e => {
+    if(e.key !== "Tab") return;
+    const onb = document.getElementById("onbWrap");
+    const sheet = document.getElementById("sheet");
+    const active = onb && onb.classList.contains("on") ? onb
+                : sheet && sheet.classList.contains("on") ? sheet
+                : null;
+    if(!active) return;
+    const sel = 'button:not([disabled]):not([aria-hidden="true"]), [href], input:not([disabled])';
+    const focusable = Array.from(active.querySelectorAll(sel))
+      .filter(el => el.offsetParent !== null);    // skip hidden/display:none
+    if(!focusable.length) return;
+    const first = focusable[0], last = focusable[focusable.length - 1];
+    const cur = document.activeElement;
+    if(e.shiftKey){
+      if(cur === first || !active.contains(cur)){ e.preventDefault(); last.focus(); }
+    } else {
+      if(cur === last || !active.contains(cur)){ e.preventDefault(); first.focus(); }
+    }
+  });
 }
 
-function refreshWho(){
-  const b=document.getElementById("whoBtn"); if(!b) return;
-  const n=TripVotes.name();
-  b.textContent = n ? n : "Set name";
+/**
+ * Renders the user chip in the top-right of the nav.
+ * Shows "Get started" before the profile is set; name + group + budget summary after.
+ * User name is HTML-escaped before insertion as defence-in-depth against stored XSS.
+ */
+function refreshNav(){
+  const b = document.getElementById("whoBtn"); if(!b) return;
+  const p = Profile.get();
+  if(!Profile.isComplete()){
+    b.innerHTML = `<span class="who-cta">Get started</span>`;
+    return;
+  }
+  const totalK = Math.round((p.budgetPP * p.groupSize) / 1000);
+  b.innerHTML = `<span class="who-name">${escapeHTML(p.name)}</span>`
+              + `<span class="who-meta">${p.groupSize}p · ₹${totalK}k</span>`;
 }
-let _pendingVote = null; // {placeId, vote} applied after name set
-function openName(edit){
-  const mw=document.getElementById("nameModal");
-  document.getElementById("nameInput").value = edit ? TripVotes.name() : "";
-  mw.classList.add("on");
-  setTimeout(()=>document.getElementById("nameInput").focus(),60);
+
+/* ============================================================
+   ONBOARDING — story-first multi-step
+   ============================================================ */
+const ONB_STEPS = [
+  { key:"name", q:"What's your name?",
+    hint:"First name is fine — your group sees this next to your votes.",
+    type:"text", placeholder:"e.g. Pranav", maxlength:24,
+    validate:v => typeof v==="string" && NAME_RX.test(v.trim()),
+    parse:v => v.trim(),
+    err:"Letters, digits, spaces, . ' or - only (1–24 chars)." },
+  { key:"age", q:"How old are you?",
+    hint:"Sizes up activity options (easy-rider vs self-drive on the Ha Giang loop, etc.).",
+    type:"number", placeholder:"e.g. 28", min:13, max:99,
+    validate:v => Number.isInteger(+v) && +v>=13 && +v<=99,
+    parse:v => +v,
+    err:"Age between 13 and 99." },
+  { key:"groupSize", q:"How many people in your group?",
+    hint:"Including you. Drives accommodation suggestions and cost-per-person totals.",
+    type:"number", placeholder:"e.g. 5", min:1, max:20,
+    validate:v => Number.isInteger(+v) && +v>=1 && +v<=20,
+    parse:v => +v,
+    err:"Group size between 1 and 20." },
+  { key:"budgetPP", q:"Per-person budget (₹)?",
+    hint:"Total spend per person — flights, hotels, food, activities. We match routes to it.",
+    type:"number", placeholder:"e.g. 60000", min:0, max:5000000,
+    validate:v => Number.isInteger(+v) && +v>0 && +v<=5000000,
+    parse:v => +v,
+    err:"A whole rupee amount, more than 0." },
+  { key:"bufferPP", q:"Buffer per person (₹)?",
+    hint:"Wiggle room each person has on top of the budget. Used for upgrades or emergencies.",
+    type:"number", placeholder:"e.g. 15000", min:0, max:5000000,
+    validate:v => Number.isInteger(+v) && +v>=0 && +v<=5000000,
+    parse:v => +v,
+    err:"A whole rupee amount, 0 or more." }
+];
+
+let _onbIdx = 0;
+let _onbData = {};
+let _pendingVote = null;
+let _lastOnbTrigger = null;
+
+/**
+ * Opens the onboarding takeover. Stores the trigger element so focus can be restored on close.
+ * In edit mode (profile already complete) the close button is visible and saves on dismiss.
+ */
+function openOnboarding(){
+  _lastOnbTrigger = (document.activeElement && document.activeElement !== document.body) ? document.activeElement : null;
+  _onbData = { ...Profile.get() };
+  _onbIdx = 0;
+  const card = document.getElementById("onbWrap");
+  card.classList.add("on");
+  document.getElementById("onb-close").style.display = Profile.isComplete() ? "" : "none";
+  renderOnbStep();
 }
-function closeName(){ document.getElementById("nameModal").classList.remove("on"); _pendingVote=null; }
-function saveName(){
-  const v=document.getElementById("nameInput").value.trim();
-  if(!v) return;
-  TripVotes.setName(v); refreshWho();
-  document.getElementById("nameModal").classList.remove("on");
-  if(_pendingVote){ const {placeId,vote}=_pendingVote; _pendingVote=null; doVote(placeId,vote); }
-  // re-derive my votes view
+
+/**
+ * Closes the onboarding takeover.
+ * When the user dismisses an *edit* session (`viaClose=true` and profile was complete),
+ * any in-flight value in the current step is saved if it validates — so explicit close
+ * still persists the change instead of dropping it.
+ */
+function closeOnboarding(viaClose){
+  const wrap = document.getElementById("onbWrap");
+  if(viaClose && Profile.isComplete()){
+    const s = ONB_STEPS[_onbIdx];
+    const v = document.getElementById("onb-input").value;
+    if(s.validate(v)) _onbData[s.key] = s.parse(v);
+    if(Object.keys(_onbData).length >= ONB_STEPS.length){
+      Profile.set(_onbData);
+      TripVotes.setName(_onbData.name);
+      refreshNav(); renderHomeGreeting(); applyVoteUI();
+    }
+  }
+  wrap.classList.remove("on");
+  _pendingVote = null;
+  if(_lastOnbTrigger){ try { _lastOnbTrigger.focus(); } catch {} _lastOnbTrigger = null; }
+}
+
+/** Renders the current onboarding step into the takeover card and re-triggers the slide-in animation. */
+function renderOnbStep(){
+  const s = ONB_STEPS[_onbIdx], total = ONB_STEPS.length;
+  const pct = ((_onbIdx + 1) / total) * 100;
+  const bar = document.getElementById("onb-bar");
+  bar.style.width = pct + "%";
+  bar.setAttribute("aria-valuenow", String(Math.round(pct)));
+  document.getElementById("onb-step").textContent = `Step ${_onbIdx+1} of ${total}`;
+  document.getElementById("onb-q").textContent = s.q;
+  document.getElementById("onb-hint").textContent = s.hint;
+  const input = document.getElementById("onb-input");
+  input.type = s.type;
+  if(s.type === "number") input.setAttribute("inputmode", "numeric");
+  else input.removeAttribute("inputmode");
+  input.placeholder = s.placeholder;
+  input.value = _onbData[s.key] != null ? _onbData[s.key] : "";
+  input.removeAttribute("min"); input.removeAttribute("max"); input.removeAttribute("maxlength");
+  if(s.min != null) input.min = s.min;
+  if(s.max != null) input.max = s.max;
+  if(s.maxlength != null) input.maxLength = s.maxlength;
+  document.getElementById("onb-err").textContent = "";
+  document.getElementById("onb-back").style.visibility = _onbIdx>0 ? "visible" : "hidden";
+  document.getElementById("onb-next").textContent = _onbIdx === total-1 ? "Start planning →" : "Next →";
+
+  // Re-trigger the slide-in animation by toggling the class.
+  const stepBody = document.getElementById("onb-stepbody");
+  if(stepBody){
+    stepBody.classList.remove("in");
+    void stepBody.offsetWidth;            // force reflow so the animation re-runs
+    stepBody.classList.add("in");
+  }
+  // Longer delay on touch devices so iOS's keyboard animation can settle before focus scrolls the view.
+  setTimeout(() => input.focus(), isTouchPointer() ? 300 : 60);
+}
+function onbNext(){
+  const s = ONB_STEPS[_onbIdx];
+  const v = document.getElementById("onb-input").value;
+  if(!s.validate(v)){ document.getElementById("onb-err").textContent = s.err; return; }
+  _onbData[s.key] = s.parse(v);
+  if(_onbIdx < ONB_STEPS.length - 1){ _onbIdx++; renderOnbStep(); }
+  else { onbFinish(); }
+}
+/** Steps back. Only persists the in-flight input if it validates,
+   so a half-typed invalid value can't corrupt `_onbData`. */
+function onbBack(){
+  if(_onbIdx<=0) return;
+  const s = ONB_STEPS[_onbIdx];
+  const v = document.getElementById("onb-input").value;
+  if(s.validate(v)) _onbData[s.key] = s.parse(v);
+  _onbIdx--; renderOnbStep();
+}
+function onbFinish(){
+  Profile.set(_onbData);
+  TripVotes.setName(_onbData.name);
+  closeOnboarding();
+  refreshNav();
+  renderHomeGreeting();
   applyVoteUI();
+  if(_pendingVote){ const {placeId,vote}=_pendingVote; _pendingVote=null; doVote(placeId,vote); }
 }
 
-/* voting entry point used by all controls */
+/* voting entry point — now gates on full profile */
 function requestVote(placeId, vote){
-  if(!TripVotes.name()){ _pendingVote={placeId,vote}; openName(false); return; }
+  if(!Profile.isComplete()){ _pendingVote = {placeId, vote}; openOnboarding(); return; }
   doVote(placeId, vote);
 }
 function doVote(placeId, vote){
@@ -249,37 +667,57 @@ function doVote(placeId, vote){
   }
 }
 
-/* detail sheet */
+/* ============================================================
+   Detail sheet — opens from a marker / card / result row.
+   Locks body scroll while open, traps focus, restores focus on close.
+   ============================================================ */
+let _lastSheetTrigger = null;
+
+/** Opens the detail sheet for a place id. Focus moves to the close button. */
 function openSheet(id){
-  const d=byId(id);
+  const d = byId(id); if(!d) return;
+  _lastSheetTrigger = (document.activeElement && document.activeElement !== document.body) ? document.activeElement : null;
+
   document.querySelectorAll(".leaflet-marker-icon").forEach(el=>el.classList.remove("active"));
   if(window._markers && window._markers[id]){ const el=window._markers[id].getElement(); if(el) el.classList.add("active"); }
+
   const mv = myVotes()[id];
-  const vbtn = v => `<button data-v="${v}" class="${mv===v?'sel-'+v:''}">${v[0].toUpperCase()+v.slice(1)}</button>`;
+  const vbtn = v => `<button data-v="${v}" class="${mv===v?'sel-'+v:''}" aria-label="${v[0].toUpperCase()+v.slice(1)} for ${escapeHTML(d.name)}">${v[0].toUpperCase()+v.slice(1)}</button>`;
   document.getElementById("sheet-body").innerHTML = `
-    <button class="sheet-close" id="sheet-close" aria-label="Close">×</button>
+    <button class="sheet-close" id="sheet-close" aria-label="Close details">×</button>
     <span class="s-tier ${tierCls(d.tier)}">${tierTxt(d.tier)}</span>
-    <div class="s-name">${d.name}</div>
-    <div class="s-reg">${d.region}</div>
+    <div class="s-name" id="sheet-name">${escapeHTML(d.name)}</div>
+    <div class="s-reg">${escapeHTML(d.region)}</div>
     <div class="s-meters">
-      <div><div class="m-lab">Crowd / commercial</div><div class="track">${segs(d.crowd,'crowd')}</div><div class="rv">${d.crowdNote}</div></div>
-      <div><div class="m-lab">Things to do</div><div class="track">${segs(d.act,'act')}</div><div class="rv">${d.actNote}</div></div>
+      <div><div class="m-lab">Crowd / commercial</div><div class="track">${segs(d.crowd,'crowd')}</div><div class="rv">${escapeHTML(d.crowdNote)}</div></div>
+      <div><div class="m-lab">Things to do</div><div class="track">${segs(d.act,'act')}</div><div class="rv">${escapeHTML(d.actNote)}</div></div>
     </div>
     <p class="s-desc">${d.desc}</p>
-    <div class="s-do"><h4>What you'd actually do</h4><ul>${d.doing.map(x=>`<li>${x}</li>`).join("")}</ul></div>
-    <div class="s-when">${d.when}</div>
+    <div class="s-do"><h4>What you'd actually do</h4><ul>${d.doing.map(x=>`<li>${escapeHTML(x)}</li>`).join("")}</ul></div>
+    <div class="s-when">${escapeHTML(d.when)}</div>
     <div class="s-vlabel">Your vote</div>
     <div class="vote" data-id="${d.id}">${vbtn("yes")}${vbtn("maybe")}${vbtn("skip")}</div>`;
-  document.getElementById("sheet-close").addEventListener("click",closeSheet);
-  document.querySelectorAll(`#sheet-body .vote button`).forEach(b=>b.addEventListener("click",()=>requestVote(d.id,b.dataset.v)));
-  document.getElementById("sheet").classList.add("on");
+  document.getElementById("sheet-close").addEventListener("click", closeSheet);
+  document.querySelectorAll(`#sheet-body .vote button`).forEach(b => b.addEventListener("click", () => requestVote(d.id, b.dataset.v)));
+
+  const sheet = document.getElementById("sheet");
+  sheet.classList.add("on");
+  sheet.setAttribute("aria-hidden", "false");
+  sheet.setAttribute("aria-labelledby", "sheet-name");
   document.getElementById("scrim").classList.add("on");
-  document.getElementById("sheet").setAttribute("aria-hidden","false");
+  document.body.style.overflow = "hidden";   // scroll-lock the page while the sheet is open
+  setTimeout(() => { const c = document.getElementById("sheet-close"); if(c) c.focus(); }, 60);
 }
+
+/** Closes the detail sheet, unlocks scroll, restores focus to the trigger. */
 function closeSheet(){
-  const s=document.getElementById("sheet"); if(!s) return;
-  s.classList.remove("on"); document.getElementById("scrim").classList.remove("on"); s.setAttribute("aria-hidden","true");
-  document.querySelectorAll(".leaflet-marker-icon").forEach(el=>el.classList.remove("active"));
+  const s = document.getElementById("sheet"); if(!s) return;
+  s.classList.remove("on");
+  s.setAttribute("aria-hidden", "true");
+  document.getElementById("scrim").classList.remove("on");
+  document.body.style.overflow = "";
+  document.querySelectorAll(".leaflet-marker-icon").forEach(el => el.classList.remove("active"));
+  if(_lastSheetTrigger){ try { _lastSheetTrigger.focus(); } catch {} _lastSheetTrigger = null; }
 }
 
 /* ============================================================
@@ -324,13 +762,27 @@ function initMap(){
   sat.addTo(map); labels.addTo(map);
 
   window._markers={}; const pts=[];
-  PLACES.forEach(d=>{
-    const icon=L.divIcon({ className:"", html:`<div class="mk"><span class="mk-dot"></span><span class="mk-name">${d.name}</span></div>`, iconSize:[15,15], iconAnchor:[7,7] });
-    const mk=L.marker([d.lat,d.lng],{icon}).addTo(map);
-    mk.on("click",()=>openSheet(d.id));
-    mk.on("mouseover",()=>{ const e=mk.getElement(); if(e)e.style.zIndex=1000; });
-    mk.on("mouseout",()=>{ const e=mk.getElement(); if(e)e.style.zIndex=""; });
-    window._markers[d.id]=mk; pts.push([d.lat,d.lng]);
+  const reduced = prefersReducedMotion();
+  PLACES.forEach((d, i) => {
+    const icon = L.divIcon({ className:"", html:`<div class="mk"><span class="mk-dot"></span><span class="mk-name">${escapeHTML(d.name)}</span></div>`, iconSize:[15,15], iconAnchor:[7,7] });
+    const mk = L.marker([d.lat,d.lng], { icon, keyboard: true, title: d.name, alt: d.name }).addTo(map);
+    mk.on("click", () => openSheet(d.id));
+    mk.on("mouseover", () => { const e = mk.getElement(); if(e) e.style.zIndex = 1000; });
+    mk.on("mouseout",  () => { const e = mk.getElement(); if(e) e.style.zIndex = ""; });
+    const el = mk.getElement();
+    if(el){
+      el.setAttribute("role", "button");
+      el.setAttribute("aria-label", `${d.name} — open details`);
+      el.addEventListener("keydown", e => {
+        if(e.key === "Enter" || e.key === " "){ e.preventDefault(); openSheet(d.id); }
+      });
+      if(!reduced){
+        // Animate the inner .mk div so Leaflet's own transform on the wrapper isn't disturbed.
+        const inner = el.querySelector(".mk");
+        if(inner) inner.style.animationDelay = (i * 0.06) + "s";
+      }
+    }
+    window._markers[d.id] = mk; pts.push([d.lat,d.lng]);
   });
   map.fitBounds(pts,{padding:[60,60]});
   setTimeout(()=>map.invalidateSize(),250);
@@ -398,14 +850,278 @@ function buildChart(){
   host.querySelectorAll(".pt").forEach(c=>c.addEventListener("click",()=>openSheet(c.dataset.id)));
 }
 
+/* ============================================================
+   ANIMATION HELPERS — small, dependency-free, reduced-motion safe.
+   ============================================================ */
+/** True if the user has asked the OS to minimise motion. */
+const prefersReducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+/** True if the primary pointer is coarse (touch screen) — used to skip desktop-only effects. */
+const isTouchPointer = () => matchMedia("(pointer: coarse)").matches;
+
+/**
+ * Animates `el.textContent` from its current numeric value to `target`.
+ * Skips the animation entirely under prefers-reduced-motion.
+ */
+function animateCount(el, target, duration = 800){
+  if(!el) return;
+  const start = parseInt(el.textContent, 10) || 0;
+  if(start === target || prefersReducedMotion()){ el.textContent = String(target); return; }
+  const t0 = performance.now();
+  function step(t){
+    const p = Math.min(1, (t - t0) / duration);
+    const eased = 1 - Math.pow(1 - p, 3);
+    el.textContent = String(Math.round(start + (target - start) * eased));
+    if(p < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+/**
+ * Home-page hero choreography:
+ * - sets stagger index on each letter and triggers the entrance via body.hero-in
+ * - generates the place-name marquee from PLACES
+ * - wires magnetic CTAs and the desktop cursor follower
+ * - adds gentle parallax to the palm SVG on scroll
+ * - applies 3D tilt to .tile cards on hover
+ */
+function initHero(){
+  const reduced = prefersReducedMotion();
+
+  // Letter stagger — assign --i so the CSS animation delay staggers per letter.
+  // (The animation itself is fully CSS-driven via `both` fill, so even if this
+  //  fails or the script never runs, the title still reveals.)
+  const main = document.querySelector(".ht-main");
+  if(main){
+    Array.from(main.children).forEach((el, i) => el.style.setProperty("--i", String(i)));
+  }
+
+  // Marquee — built from PLACES so it always reflects the current shortlist.
+  const track = document.getElementById("hm-track");
+  if(track){
+    const names = [...new Set(PLACES.map(p => p.name))];
+    const one = names.map(n => `<span class="hm-name">${escapeHTML(n)}</span><span class="hm-sep">·</span>`).join("");
+    track.innerHTML = one + one; // duplicate makes the loop seamless
+  }
+
+  // Magnetic CTAs (desktop only)
+  if(!isTouchPointer() && !reduced){
+    document.querySelectorAll("[data-magnetic]").forEach(el => {
+      el.addEventListener("mousemove", e => {
+        const r = el.getBoundingClientRect();
+        const mx = e.clientX - (r.left + r.width / 2);
+        const my = e.clientY - (r.top + r.height / 2);
+        el.style.transform = `translate(${mx * 0.18}px, ${my * 0.25}px)`;
+      });
+      el.addEventListener("mouseleave", () => { el.style.transform = ""; });
+    });
+  }
+
+  // Cursor follower (desktop only, secondary to the OS cursor)
+  if(!isTouchPointer() && !reduced){
+    const cur = document.createElement("div");
+    cur.className = "hero-cursor";
+    cur.setAttribute("aria-hidden", "true");
+    document.body.appendChild(cur);
+    let tx = 0, ty = 0, x = 0, y = 0;
+    document.addEventListener("mousemove", e => { tx = e.clientX; ty = e.clientY; cur.classList.add("on"); });
+    document.addEventListener("mouseleave", () => cur.classList.remove("on"));
+    document.querySelectorAll("a,button,[data-magnetic]").forEach(el => {
+      el.addEventListener("mouseenter", () => cur.classList.add("over"));
+      el.addEventListener("mouseleave", () => cur.classList.remove("over"));
+    });
+    (function loop(){
+      x += (tx - x) * 0.22;
+      y += (ty - y) * 0.22;
+      cur.style.transform = `translate3d(${x}px, ${y}px, 0) translate(-50%, -50%)`;
+      requestAnimationFrame(loop);
+    })();
+  }
+
+  // Palm parallax — gentle translate as the page scrolls.
+  const palm = document.querySelector(".hero-bg svg");
+  if(palm && !reduced){
+    window.addEventListener("scroll", () => {
+      const y = window.scrollY;
+      palm.style.transform = `translateY(${Math.min(y * 0.3, 220)}px)`;
+    }, { passive: true });
+  }
+
+  // 3D tilt on home tiles (desktop only)
+  if(!isTouchPointer() && !reduced){
+    document.querySelectorAll(".tile").forEach(t => {
+      t.addEventListener("mousemove", e => {
+        const r = t.getBoundingClientRect();
+        const mx = (e.clientX - r.left) / r.width - 0.5;
+        const my = (e.clientY - r.top) / r.height - 0.5;
+        t.style.setProperty("--tx", `${mx * 6}deg`);
+        t.style.setProperty("--ty", `${-my * 6}deg`);
+        t.classList.add("tilt");
+      });
+      t.addEventListener("mouseleave", () => {
+        t.classList.remove("tilt");
+        t.style.removeProperty("--tx");
+        t.style.removeProperty("--ty");
+      });
+    });
+  }
+}
+
+/* Routes page — picker + Leaflet polyline + when-to-go strip */
+function initRoutes(){
+  if(typeof L === "undefined") return;
+  const picker = document.getElementById("routePicker");
+  if(!picker) return;
+
+  picker.innerHTML = ROUTES.map((r,i)=>{
+    const est = estimateRouteCost(r);
+    return `<button class="route-pick ${i===0?'on':''}" data-r="${r.id}">
+      <div class="rp-name">${r.name}</div>
+      <div class="rp-meta">${r.days} days · ${r.stops.length} stops</div>
+      <div class="rp-cost">${formatINR(est)}/person</div>
+    </button>`;
+  }).join("");
+
+  const map = L.map("routeMap",{ zoomControl:false, scrollWheelZoom:false, minZoom:5, maxZoom:13 });
+  L.control.zoom({position:"topright"}).addTo(map);
+  L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",{attribution:"Tiles © Esri",maxZoom:18}).addTo(map);
+  L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",{maxZoom:18,opacity:0.9}).addTo(map);
+
+  let _layer = null;
+  function showRoute(routeId){
+    const r = ROUTES.find(x=>x.id===routeId); if(!r) return;
+    if(_layer){ map.removeLayer(_layer); _layer=null; }
+    const grp = L.featureGroup();
+    const coords = [];
+    r.stops.forEach((s,idx)=>{
+      const p = byId(s.id); if(!p) return;
+      const icon = L.divIcon({ className:"",
+        html:`<div class="rmk"><span class="rmk-num">${idx+1}</span><span class="rmk-name">${p.name}</span></div>`,
+        iconSize:[22,22], iconAnchor:[11,11] });
+      L.marker([p.lat,p.lng],{icon}).addTo(grp);
+      coords.push([p.lat,p.lng]);
+    });
+    const line = L.polyline(coords, { color:"#c2622f", weight:3, opacity:0.9 }).addTo(grp);
+    grp.addTo(map); _layer = grp;
+    if(coords.length>1) map.fitBounds(L.latLngBounds(coords), { padding:[60,60] });
+    // Animate the polyline drawing in via stroke-dashoffset
+    if(!prefersReducedMotion()){
+      const path = line.getElement();
+      if(path){
+        path.classList.add("route-line");
+        try {
+          const len = path.getTotalLength();
+          path.style.strokeDasharray = len + " " + len;
+          path.style.strokeDashoffset = String(len);
+          void path.getBoundingClientRect();      // force reflow
+          path.style.strokeDashoffset = "0";
+        } catch (e) { Log.warn("initRoutes", "polyline animation skipped", e); }
+      }
+    }
+    renderRouteMeta(r);
+  }
+  function renderRouteMeta(r){
+    const meta = document.getElementById("routeMeta"); if(!meta) return;
+    const cost = estimateRouteCost(r);
+    const fit = budgetFit(cost);
+    const stopsHtml = r.stops.map((s,i)=>{
+      const p = byId(s.id); if(!p) return "";
+      return `<div class="stop"><div class="stop-n">${i+1}</div>
+        <div class="stop-body"><div class="stop-name">${p.name}</div>
+          <div class="stop-meta">${p.region} · ${s.nights} night${s.nights>1?'s':''}</div></div></div>`;
+    }).join("");
+    const totalGroup = Profile.isComplete() ? `<span class="rm-chip">${formatINR(cost*Profile.get().groupSize)} for ${Profile.get().groupSize}</span>` : "";
+    meta.innerHTML = `
+      <div class="rm-head">
+        <h3>${r.name}</h3>
+        <div class="rm-chips">
+          <span class="rm-chip">${r.days} days</span>
+          <span class="rm-chip">${r.stops.length} stops</span>
+          <span class="rm-chip">${formatINR(cost)}/person</span>
+          ${totalGroup}
+          ${fit}
+        </div>
+      </div>
+      <p class="rm-note">${r.note}</p>
+      <div class="stop-list">${stopsHtml}</div>
+      <p class="rm-disclaimer">Estimate is a rough sum of flights (~₹25k), e-visa (~₹2.1k), in-country (~₹3k/day) and inter-stop transfers (~₹1.5k each). Hotels & activities vary; treat as a baseline.</p>`;
+  }
+
+  picker.querySelectorAll(".route-pick").forEach(btn=>{
+    btn.addEventListener("click",()=>{
+      picker.querySelectorAll(".route-pick").forEach(b=>b.classList.remove("on"));
+      btn.classList.add("on");
+      showRoute(btn.dataset.r);
+    });
+  });
+  showRoute(ROUTES[0].id);
+  setTimeout(()=>map.invalidateSize(),250);
+
+  /* when-to-go strip with staggered cell reveal */
+  const wh = document.getElementById("whenmap");
+  if(wh){
+    const mo = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    const lab = ["avoid","okay","good","excellent"];
+    wh.innerHTML = `
+      <div class="when-head"><div class="when-region"></div>${mo.map(m=>`<div class="when-mo">${m}</div>`).join("")}</div>
+      ${WHEN.map(w=>`<div class="when-row"><div class="when-region">${w.region}</div>${w.months.map((v,i)=>`<div class="wcell w${v}" title="${mo[i]}: ${lab[v-1]}"></div>`).join("")}</div>`).join("")}
+      <div class="when-legend">
+        <span><span class="wcell w4"></span> excellent</span>
+        <span><span class="wcell w3"></span> good</span>
+        <span><span class="wcell w2"></span> okay</span>
+        <span><span class="wcell w1"></span> avoid</span>
+      </div>`;
+
+    // Stagger the cell reveal once the strip scrolls into view.
+    if(!prefersReducedMotion()){
+      const cells = wh.querySelectorAll(".when-row .wcell");
+      const reveal = () => cells.forEach((c, i) => { c.style.animationDelay = (i * 18) + "ms"; c.classList.add("in"); });
+      const io = new IntersectionObserver(es => es.forEach(e => { if(e.isIntersecting){ reveal(); io.disconnect(); } }), { threshold: 0.2 });
+      io.observe(wh);
+    }
+  }
+  applyVoteUI();
+}
+
+function estimateRouteCost(r){
+  const flights = 25000, visa = 2100, perDay = 3000, perTransfer = 1500;
+  return flights + visa + r.days*perDay + Math.max(0,r.stops.length-1)*perTransfer;
+}
+function budgetFit(cost){
+  if(!Profile.isComplete()) return "";
+  const p = Profile.get();
+  const cap = p.budgetPP, hard = p.budgetPP + p.bufferPP;
+  if(cost <= cap)  return `<span class="rm-chip fit-good">fits budget</span>`;
+  if(cost <= hard) return `<span class="rm-chip fit-warn">uses buffer (+${formatINR(cost-cap)})</span>`;
+  return `<span class="rm-chip fit-bad">over by ${formatINR(cost-hard)}</span>`;
+}
+function formatINR(n){ return "₹" + Math.round(n).toLocaleString("en-IN"); }
+
+/* Home greeting — reflects the captured profile */
+function renderHomeGreeting(){
+  const el = document.getElementById("greet"); if(!el) return;
+  if(!Profile.isComplete()){ el.removeAttribute("data-on"); el.innerHTML = ""; return; }
+  const p = Profile.get();
+  const total = p.budgetPP * p.groupSize;
+  const buf = p.bufferPP * p.groupSize;
+  el.setAttribute("data-on","");
+  el.innerHTML = `
+    <div class="g-line"><span class="g-hi">Hi, ${escapeHTML(p.name)}.</span></div>
+    <div class="g-bod"><b>${p.groupSize}</b> ${p.groupSize===1?"traveller":"travellers"} · <b>${formatINR(p.budgetPP)}</b>/person <span class="g-dim">(+ ${formatINR(p.bufferPP)} buffer)</span></div>
+    <div class="g-tot">Total band: <b>${formatINR(total)}</b> – <b>${formatINR(total+buf)}</b></div>
+    <button class="g-edit" id="g-edit">Edit details</button>`;
+  document.getElementById("g-edit").addEventListener("click", openOnboarding);
+}
+
 function initResults(){ renderResults(); }
+/**
+ * Renders the results page: ranks all PLACES by score (yes*2 + maybe),
+ * shows a stacked vote bar per place plus voter-name chips.
+ * All voter names are HTML-escaped — Firestore data is treated as untrusted.
+ */
 function renderResults(){
   const host=document.getElementById("results"); if(!host) return;
   const voters=[...new Set(ALL_VOTES.map(v=>v.name).filter(Boolean))];
-  document.getElementById("voterCount").textContent = voters.length;
-  // banner if not live
-  const banner=document.getElementById("liveBanner");
-  if(banner) banner.style.display = TripVotes.live ? "none" : "block";
+  animateCount(document.getElementById("voterCount"), voters.length);
 
   if(ALL_VOTES.length===0){
     host.innerHTML = `<div class="empty">No votes yet. Open the <a href="map.html" style="color:var(--accent);font-weight:600">map</a> or <a href="places.html" style="color:var(--accent);font-weight:600">places</a> and start voting.</div>`;
@@ -420,7 +1136,7 @@ function renderResults(){
   host.innerHTML = rows.map((r,i)=>{
     const total=r.yes.length+r.maybe.length+r.skip.length;
     const pct=n=> total? (n/total*100):0;
-    const chips=(arr,cls,sym)=>arr.map(v=>`<span class="chip ${cls}">${sym} ${v.name}</span>`).join("");
+    const chips=(arr,cls,sym)=>arr.map(v=>`<span class="chip ${cls}">${sym} ${escapeHTML(v.name)}</span>`).join("");
     const bar = total ? `<div class="stack">
         <div class="sy" style="width:${pct(r.yes.length)}%"></div>
         <div class="sm" style="width:${pct(r.maybe.length)}%"></div>
@@ -441,10 +1157,26 @@ function renderResults(){
 /* ============================================================
    7) reveal observer + BOOT
    ============================================================ */
+/**
+ * Reveals `.reveal` elements as they scroll into view.
+ * Has two safety nets: an IntersectionObserver feature check, and a body-class
+ * fallback that force-reveals anything still hidden 2.5s after window `load`.
+ */
 function observeReveals(){
-  const io=new IntersectionObserver(es=>es.forEach(e=>{ if(e.isIntersecting){ e.target.classList.add("in"); io.unobserve(e.target);} }),{threshold:0.12});
-  document.querySelectorAll(".reveal").forEach(el=>io.observe(el));
+  if(typeof IntersectionObserver === "undefined"){
+    document.querySelectorAll(".reveal").forEach(el => el.classList.add("in"));
+    return;
+  }
+  const io = new IntersectionObserver(es => es.forEach(e => {
+    if(e.isIntersecting){ e.target.classList.add("in"); io.unobserve(e.target); }
+  }), { threshold: 0.12 });
+  document.querySelectorAll(".reveal").forEach(el => io.observe(el));
 }
+
+/** Safety net: 2.5s after load, force-reveal any element the IntersectionObserver missed. */
+window.addEventListener("load", () => {
+  setTimeout(() => document.body.classList.add("reveal-fallback"), 2500);
+});
 
 document.addEventListener("DOMContentLoaded",()=>{
   injectChrome();
@@ -455,5 +1187,10 @@ document.addEventListener("DOMContentLoaded",()=>{
   const page=document.body.dataset.page;
   if(page==="map") initMap();
   else if(page==="places") initPlaces();
+  else if(page==="routes") initRoutes();
   else if(page==="results") initResults();
+  if(page==="home"){ initHero(); renderHomeGreeting(); }
+
+  // first-visit story: open onboarding if profile isn't set
+  if(!Profile.isComplete()) openOnboarding();
 });

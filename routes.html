@@ -5,43 +5,44 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src https://fonts.gstatic.com; img-src 'self' data: https://server.arcgisonline.com https://*.basemaps.cartocdn.com https://*.tile.openstreetmap.org https://*.gstatic.com; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://firestore.googleapis.com wss://*.firebaseio.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'">
 <meta name="referrer" content="strict-origin-when-cross-origin">
-<title>Map · Vietnam '26</title>
+<title>Routes &amp; when to go &middot; Vietnam '26</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <link rel="stylesheet" href="styles.css">
 </head>
-<body data-page="map">
+<body data-page="routes">
 
 <section class="section center" style="padding-bottom:0">
   <div class="wrap">
-    <div class="tag reveal">The shortlist · on the real map</div>
-    <h2 class="reveal">Eleven points, north to south.</h2>
-    <p class="sub reveal">Tap any point to see why it made the list, what you'd do there, and to cast your vote. Drag to explore; pinch or use + / − to zoom. Your picks colour the markers.</p>
+    <div class="tag reveal">The trip &middot; two ways</div>
+    <h2 class="reveal">Routes &amp; when to go.</h2>
+    <p class="sub reveal">Three curated paths through the shortlist &mdash; pick one to see the line on the map and the stops in order. Below, the months that work best for each region.</p>
   </div>
 </section>
 
 <section class="section" style="padding-top:34px">
   <div class="wrap">
-    <div class="map-frame reveal">
-      <div class="map-controls">
-        <button id="b-sat" class="on">Satellite</button>
-        <button id="b-light">Map</button>
-      </div>
-      <div class="legend">
-        <div class="row"><span class="sw sw-yes"></span> Yes</div>
-        <div class="row"><span class="sw sw-maybe"></span> Maybe</div>
-        <div class="row"><span class="sw sw-skip"></span> Skip</div>
-        <div class="row"><span class="sw sw-none"></span> Not voted</div>
-      </div>
-      <div id="map"></div>
+    <div class="route-picker reveal" id="routePicker"></div>
+    <div class="route-frame reveal">
+      <div id="routeMap"></div>
     </div>
+    <div class="route-meta reveal" id="routeMeta"></div>
+  </div>
+</section>
+
+<section class="section" style="padding-top:20px">
+  <div class="wrap">
+    <div class="tag reveal">Climate at a glance</div>
+    <h2 class="reveal" style="font-size:clamp(24px,4vw,36px)">When to go.</h2>
+    <p class="sub reveal" style="margin-bottom:6px">Suitability by region across the year. Greener is better; red is monsoon / typhoon territory.</p>
+    <div class="whenmap reveal" id="whenmap"></div>
   </div>
 </section>
 
 <div class="foot">
-  Tap a marker to vote. Results combine on the <a href="results.html" style="color:var(--accent);font-weight:600">results page</a>. Map imagery © Esri & OpenStreetMap.
+  Costs are rough baselines &mdash; live flight and hotel pricing comes later. Compare with the <a href="travel.html" style="color:var(--accent);font-weight:600">travel page</a> for transit times.
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>

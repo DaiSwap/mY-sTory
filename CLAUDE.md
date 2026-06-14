@@ -12,6 +12,18 @@ A small **multi-page static site** for our group to (1) decide which Vietnam pla
 - **Voting:** first-name identity, Yes / Maybe / Skip, real-time via **Firebase Firestore** (compat SDK). Falls back to **localStorage** automatically if the Firebase config isn't filled in yet.
 - **Firebase:** config NOT yet set — paste the web config into `app.js` and publish the Firestore rules (below) to turn on shared live voting.
 
+## Design references
+The visual / interaction language is split deliberately:
+- **Home hero only** — bold, expressive, latecheckout-inspired. Big typographic statement, marquee strip, magnetic CTAs, cursor follower (desktop), animated palm SVG. Treat this as the moment of "wow".
+- **Rest of the site** — Apple-ish minimal per the rule below. Subtle motion only (marker drop-in, polyline draw, count-up, onboarding slide transitions, gentle tile tilt).
+
+Active references when iterating on interactivity:
+- https://www.latecheckout.studio/ — typography direction for the hero (bold sans + italic serif mix).
+- http://because-recollection.com/laurent-garnier — main interactive-website benchmark for mood, scroll choreography, and editorial polish.
+- https://cyclemon.com/ — animation choreography reference (scroll-driven reveals, scene transitions).
+
+When unsure between "more interaction" vs "less", err on the side of restraint outside the hero — the trip site is a tool, not a portfolio piece.
+
 ## Tech & principles (read before changing anything)
 - **Plain HTML / CSS / JS. No framework, no build step, no bundler.** This is deliberate. Do **not** add React/Vue/Svelte/Vite/webpack/npm. If a change seems to need a build step, find a simpler way.
 - **One shared stylesheet** (`styles.css`) + **one shared script** (`app.js`) loaded by every page.
@@ -43,28 +55,54 @@ A small **multi-page static site** for our group to (1) decide which Vietnam pla
 2. Build → Firestore Database → Create database → pick `asia-south1`.
 3. Project settings → General → Your apps → Web (`</>`) → register → copy the `firebaseConfig` object.
 4. Paste it into `app.js` (the `firebaseConfig` block near the top).
-5. Firestore → Rules → paste and **Publish**:
+5. Firestore → Rules → paste and **Publish** (hardened — validates every field, rejects garbage docs, blocks unknown collections):
 ```
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // Votes: anyone can read/write, but every doc must match the strict shape.
     match /votes/{doc} {
       allow read: if true;
-      allow write: if request.resource.data.keys().hasAll(['name','placeId','vote'])
-                   && request.resource.data.vote in ['yes','maybe','skip'];
+
+      allow create, update: if
+           request.resource.data.keys().hasOnly(['name','placeId','vote','ts'])
+        && request.resource.data.keys().hasAll(['name','placeId','vote'])
+        && request.resource.data.vote in ['yes','maybe','skip']
+        && request.resource.data.name is string
+        && request.resource.data.name.size() >= 1
+        && request.resource.data.name.size() <= 24
+        && request.resource.data.name.matches("^[\\p{L}\\p{N} .'\\-]+$")
+        && request.resource.data.placeId is string
+        && request.resource.data.placeId.size() <= 32
+        && request.resource.data.placeId.matches("^[a-z0-9_-]+$")
+        && (!('ts' in request.resource.data) || request.resource.data.ts is int);
+
       allow delete: if true;
     }
+
+    // Block every other collection by default.
+    match /{document=**} { allow read, write: if false; }
   }
 }
 ```
 The web config (apiKey etc.) is **public-by-design and safe to commit**; security comes from the rules. **Never** put a `service_role`/admin key in client code.
 
+> **Known trade-off:** `allow delete: if true` lets anyone with the link delete any vote (votes are unauthenticated by design — no Firebase Auth yet). Fine for a small family planning site; if abuse appears, switch to anonymous Firebase Auth and gate writes/deletes on `request.auth.uid`.
+
 ## Conventions for changes
 - **Add a place:** append to `PLACES` with `lat`/`lng` and all fields. Everything (markers, cards, chart, results) picks it up automatically.
-- **New page:** copy an existing page's `<head>` + script tags, set `data-page`, add an `init<Page>()` in `app.js`, add a link in `injectChrome()`, and add a home tile.
+- **New page:** copy an existing page's `<head>` + script tags (incl. the **CSP meta**), set `data-page`, add an `init<Page>()` in `app.js`, add a link in `injectChrome()`, and add a home tile.
 - **Voting:** never duplicate vote logic. Call `requestVote(placeId, vote)`. All vote UI re-syncs through `applyVoteUI()` on each Firestore snapshot.
 - **Images (when added):** use **only freely-licensed** sources (Unsplash, Wikimedia Commons) with **visible attribution**. No copyrighted images. Lazy-load them.
 - **Secrets:** never commit any private key. Firebase web config is the only "key" here and it's meant to be public.
+
+## Security & logging conventions (read before adding code)
+- **Profile data is captured upfront via onboarding** (`Profile` in `app.js`) — name, age, group size, per-person budget, buffer. Stored only in `localStorage` (private, free, never uploaded). `Profile.get()` validates every field on read; tampered values are dropped silently.
+- **Always escape user-provided strings before HTML insertion** with `escapeHTML(s)`. Never template a name (or any Firestore value) directly into `innerHTML`. Defence-in-depth on top of the Firestore name-regex rule.
+- **Use the `Log` module for diagnostics** — `Log.info/warn/error(tag, msg, extra)`. Entries are persisted to `localStorage.tripLog` (last 50). Inspect anytime in DevTools: `Log.dump()`. Replace any raw `console.warn`/`console.error` you see with `Log.*` so issues are debuggable later.
+- **All Firestore reads pass through `sanitiseVote()`** — anything that doesn't match the expected shape is dropped and logged. Treat the database as untrusted input.
+- **Every page ships a CSP `<meta>` tag** that whitelists the exact CDNs we use (gstatic for Firebase, cdnjs for Leaflet, Google Fonts, tile providers). Adding a new CDN means adding it to every page's CSP. Avoid inline `<script>` blocks — they're blocked by the policy. Inline `style="..."` attributes are allowed only because `style-src 'unsafe-inline'` is set; prefer classes when adding new code.
 
 ## Roadmap (build in this order; one small change at a time)
 

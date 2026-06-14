@@ -3,32 +3,53 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src https://fonts.gstatic.com; img-src 'self' data: https://server.arcgisonline.com https://*.basemaps.cartocdn.com https://*.tile.openstreetmap.org https://*.gstatic.com; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://firestore.googleapis.com wss://*.firebaseio.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
 <title>Vietnam '26 — let's plan it together</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body data-page="home">
 
-<section class="hero">
-  <div class="hero-bg">
-    <svg viewBox="0 0 360 720" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+<section class="hero" data-hero>
+  <div class="hero-bg" aria-hidden="true">
+    <svg viewBox="0 0 360 720" xmlns="http://www.w3.org/2000/svg">
       <path fill="var(--accent)" d="M150,44 C182,40 198,66 214,92 C232,120 214,150 198,176 C214,196 226,206 210,230 C196,258 206,286 194,312 C206,340 214,366 204,392 C218,424 206,458 216,492 C206,536 226,566 196,598 C166,626 132,648 104,662 C92,668 86,656 96,640 C112,612 100,584 122,558 C108,524 134,498 120,468 C142,440 128,412 150,386 C138,356 156,330 146,304 C160,276 150,248 166,222 C150,196 168,170 150,146 C166,118 142,92 156,70 C150,58 150,50 150,44 Z"/>
     </svg>
   </div>
-  <div class="eyebrow">Our trip &middot; dates to confirm</div>
-  <h1>Vietnam.<span class="l2">Let's plan it together.</span></h1>
-  <p>Eleven places, shortlisted for two things &mdash; how <strong>quiet</strong> they stay, and how much there is to actually <strong>do</strong>. Explore, vote, and watch the group's picks add up live.</p>
-  <div class="cta-row">
-    <a class="btn btn-primary" href="map.html">Open the map</a>
-    <a class="btn btn-ghost" href="results.html">See live results</a>
+
+  <div class="hero-eyebrow"><span class="dot"></span>Vietnam '26 &middot; dates to confirm</div>
+
+  <h1 class="hero-title" aria-label="Vietnam — let's plan it together">
+    <span class="ht-main" aria-hidden="true">
+      <span>V</span><span>i</span><span>e</span><span>t</span><span>n</span><span>a</span><span>m</span><span class="ht-dot">.</span>
+    </span>
+    <span class="ht-sub" aria-hidden="true"><em>let&rsquo;s</em> plan it <em>together</em></span>
+  </h1>
+
+  <p class="hero-lede">Eleven places, shortlisted for how <strong>quiet</strong> they stay and how much there is to actually <strong>do</strong>. Explore, vote, and watch the group&rsquo;s picks add up live.</p>
+
+  <div class="hero-cta">
+    <a class="hbtn hbtn-fill" href="map.html" data-magnetic>
+      <span>Open the map</span><span class="hbtn-arrow" aria-hidden="true">&rarr;</span>
+    </a>
+    <a class="hbtn hbtn-line" href="results.html" data-magnetic>
+      <span>See live results</span><span class="hbtn-arrow" aria-hidden="true">&rarr;</span>
+    </a>
   </div>
+
+  <div class="hero-marquee" aria-hidden="true">
+    <div class="hm-track" id="hm-track"></div>
+  </div>
+
   <div class="scrollcue"><span>Scroll</span><span class="chev"></span></div>
 </section>
 
 <section class="section center">
   <div class="wrap">
+    <div id="greet" class="greet"></div>
     <div class="tag reveal">How this works</div>
     <h2 class="reveal">Three quick steps.</h2>
     <p class="sub reveal">Set your name once, vote Yes / Maybe / Skip on each place, and the results page tallies everyone in real time. Decide the shortlist first &mdash; the full itinerary comes next.</p>
@@ -57,13 +78,12 @@
         <p>Where to land from India, flight routes &amp; rough costs, the visa, and travel times between places.</p>
         <div class="go">Plan logistics &rarr;</div>
       </a>
-      <div class="tile soon reveal">
-        <span class="badge-soon">Soon</span>
+      <a class="tile reveal" href="routes.html">
         <div class="ic">&#129517;</div>
         <h3>Routes &amp; when to go</h3>
         <p>Curated route options drawn on the map, and the best months by region.</p>
-        <div class="go">Coming next</div>
-      </div>
+        <div class="go">Plan the path &rarr;</div>
+      </a>
       <div class="tile soon reveal">
         <span class="badge-soon">Soon</span>
         <div class="ic">&#128247;</div>
