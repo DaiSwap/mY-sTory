@@ -233,12 +233,14 @@ const PROFILE_KEY = "tripProfile";
 /** Allowed name shape: 1–24 chars, letters / digits / space / .'- (Unicode letters allowed). */
 const NAME_RX = /^[\p{L}\p{N} .'\-]{1,24}$/u;
 /** Allowed entry-city codes (best-case selector on the Travel page). */
-const VALID_ORIGINS = ["BLR", "DEL", "BOM", "CCU", "OTHER"];
+const VALID_ORIGINS = ["BLR", "DEL", "BOM", "CCU", "MAA", "OTHER"];
 /** Allowed exit-airport codes from Vietnam. */
 const VALID_EXITS = ["HAN", "DAD", "SGN", "OPEN"];
 /** Display labels mapped from the codes — used by the trip-story and Travel UI. */
-const ORIGIN_LABEL = { BLR:"Bengaluru", DEL:"Delhi", BOM:"Mumbai", CCU:"Kolkata", OTHER:"another city" };
+const ORIGIN_LABEL = { BLR:"Bengaluru", DEL:"Delhi", BOM:"Mumbai", CCU:"Kolkata", MAA:"Chennai", OTHER:"another city" };
 const EXIT_LABEL   = { HAN:"Hanoi", DAD:"Da Nang", SGN:"Ho Chi Minh City", OPEN:"an open option" };
+/** Free-form city regex — letters/digits/spaces/.,'-() — 1–40 chars. Used for user-typed cities. */
+const CITY_RX = /^[\p{L}\p{N} .,'\-()]{1,40}$/u;
 
 const Profile = {
   /** Reads, validates and returns the profile (or `{}` if missing/invalid). */
@@ -259,6 +261,7 @@ const Profile = {
     if(Number.isInteger(raw.bufferPP) && raw.bufferPP >= 0 && raw.bufferPP <= 5000000) p.bufferPP = raw.bufferPP;
     if(typeof raw.origin === "string" && VALID_ORIGINS.includes(raw.origin)) p.origin = raw.origin;
     if(typeof raw.exit === "string" && VALID_EXITS.includes(raw.exit)) p.exit = raw.exit;
+    if(typeof raw.originCustom === "string" && CITY_RX.test(raw.originCustom.trim())) p.originCustom = raw.originCustom.trim();
     return p;
   },
   /** Writes the profile. Caller is responsible for validation (onboarding uses ONB_STEPS validators). */
@@ -1367,17 +1370,41 @@ function initTravel(){
   const groups = document.querySelectorAll(".tp-opts");
   if(!groups.length) return;
   const summary = document.getElementById("tpSummary");
+  const customInput = document.getElementById("tpCustomOrigin");
+
+  /** Returns the user-visible label for the chosen departure city, taking the
+   *  custom-typed city into account when origin === "OTHER". */
+  const originLabel = (p) => {
+    if(p.origin === "OTHER") return p.originCustom || ORIGIN_LABEL.OTHER;
+    if(p.origin) return ORIGIN_LABEL[p.origin];
+    return null;
+  };
+
   const renderSummary = () => {
     if(!summary) return;
     const p = Profile.get();
-    const o = p.origin ? ORIGIN_LABEL[p.origin] : null;
+    const o = originLabel(p);
     const x = p.exit ? EXIT_LABEL[p.exit] : null;
     if(!o && !x){ summary.textContent = ""; return; }
     const parts = [];
-    if(o) parts.push(`flying in from <b>${o}</b>`);
-    if(x) parts.push(p.exit === "OPEN" ? `<b>open</b> on where you exit` : `exiting via <b>${x}</b>`);
+    if(o) parts.push(`flying in from <b>${escapeHTML(o)}</b>`);
+    if(x) parts.push(p.exit === "OPEN" ? `<b>open</b> on where you exit` : `exiting via <b>${escapeHTML(x)}</b>`);
     summary.innerHTML = `Your best-case route: ${parts.join(", ")}.`;
   };
+
+  /** Shows/hides the free-text "Other city" input and pre-fills it if a custom is saved. */
+  const setCustomVisible = (visible) => {
+    if(!customInput) return;
+    if(visible){
+      customInput.hidden = false;
+      customInput.value = Profile.get().originCustom || "";
+      setTimeout(() => customInput.focus(), 60);
+    } else {
+      customInput.hidden = true;
+    }
+  };
+
+  // Wire each pill group (origin + exit)
   groups.forEach(group => {
     const key = group.dataset.key;
     const valid = key === "origin" ? VALID_ORIGINS : key === "exit" ? VALID_EXITS : null;
@@ -1392,16 +1419,44 @@ function initTravel(){
         if(!valid.includes(v)){ Log.warn("initTravel", "invalid value", v); return; }
         const p = Profile.get();
         p[key] = v;
+        // Clear the typed custom city when the user picks a standard option
+        if(key === "origin" && v !== "OTHER") delete p.originCustom;
         Profile.set(p);
         group.querySelectorAll(".tp-opt").forEach(b => {
           const on = b.dataset.val === v;
           b.classList.toggle("on", on);
           b.setAttribute("aria-checked", String(on));
         });
+        if(key === "origin") setCustomVisible(v === "OTHER");
         renderSummary();
       });
     });
   });
+
+  // Custom-city input (only present on travel.html)
+  if(customInput){
+    const startOrigin = Profile.get().origin;
+    setCustomVisible(startOrigin === "OTHER");
+    const saveCustom = () => {
+      const v = customInput.value.trim();
+      const p = Profile.get();
+      if(v && CITY_RX.test(v)){
+        p.origin = "OTHER";
+        p.originCustom = v;
+        Profile.set(p);
+      } else if(!v){
+        // Empty input: clear the typed name (origin stays "OTHER" — picks were ambiguous)
+        delete p.originCustom;
+        Profile.set(p);
+      }
+      renderSummary();
+    };
+    customInput.addEventListener("blur", saveCustom);
+    customInput.addEventListener("keydown", e => {
+      if(e.key === "Enter"){ e.preventDefault(); customInput.blur(); }
+    });
+  }
+
   renderSummary();
 }
 
@@ -1449,7 +1504,11 @@ function _storyCostPP(stops){
 /** Soft "best case" sentence appended to the story when the user has picked an origin / exit. */
 function _flightCoda(){
   const p = Profile.get();
-  const o = p.origin ? ORIGIN_LABEL[p.origin] : null;
+  // If the user typed their own city, use it; otherwise fall back to the standard label
+  const oRaw = p.origin === "OTHER"
+    ? (p.originCustom || ORIGIN_LABEL.OTHER)
+    : (p.origin ? ORIGIN_LABEL[p.origin] : null);
+  const o = oRaw ? escapeHTML(oRaw) : null;
   const x = (p.exit && p.exit !== "OPEN") ? EXIT_LABEL[p.exit] : null;
   if(!o && !x) return "";
   if(o && x) return ` Best case: flying in from <b>${o}</b>, exiting via <b>${x}</b>.`;
