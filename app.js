@@ -442,8 +442,22 @@ const TripVotes = {
    ============================================================ */
 const Suggestions = {
   collection: "suggestions",
-  /** True if `s` is a valid place-name string (1–40 chars, trimmed). */
-  validate(s){ return typeof s === "string" && s.trim().length >= 1 && s.trim().length <= 40; },
+  /** True if `s` is acceptable. Boolean signature is kept so existing call sites work. */
+  validate(s){ return this.validateMessage(s) === null; },
+  /**
+   * Returns null when valid, or a friendly error string when not.
+   * Rules: trimmed length 2–100; no more than 2 sentence-ending punctuation marks.
+   * Above the upper bounds we point users at daiswap directly instead of choking them.
+   */
+  validateMessage(s){
+    if(typeof s !== "string") return "Type a place name.";
+    const t = s.trim();
+    if(t.length < 2) return "At least 2 characters, please.";
+    if(t.length > 100) return "Keep it brief — for longer feedback, message daiswap directly.";
+    const endings = (t.match(/[.!?]/g) || []).length;
+    if(endings > 2) return "Two sentences max — for longer notes, message daiswap directly.";
+    return null;
+  },
   /** Normalises a name into a lowercase a-z0-9- slug (used for dedup). */
   _slug(s){
     return String(s).toLowerCase().trim()
@@ -534,8 +548,9 @@ function initSuggestions(){
   form.addEventListener("submit", e => {
     e.preventDefault();
     const v = input.value;
-    if(!Suggestions.validate(v)){
-      if(status) status.textContent = "Type a place name (1–40 characters).";
+    const msg = Suggestions.validateMessage(v);
+    if(msg){
+      if(status) status.textContent = msg;
       return;
     }
     if(!Profile.isComplete()){ openOnboarding(); return; }
@@ -548,16 +563,14 @@ function initSuggestions(){
   });
 
   Suggestions.subscribe(arr => {
+    // Privacy-first: never render individual suggestions or who made them. Just the count.
     const groups = aggregateSuggestions(arr);
-    if(!groups.length){
-      list.innerHTML = `<div class="suggest-empty">No suggestions yet. The group sees the list, but not who suggested what.</div>`;
+    const n = groups.length;
+    if(!n){
+      list.innerHTML = `<div class="suggest-empty">No suggestions yet.</div>`;
       return;
     }
-    list.innerHTML = groups.map(g => `
-      <div class="suggest-item">
-        <span class="si-name">${escapeHTML(g.name)}</span>
-        <span class="si-count">${g.count} ${g.count === 1 ? "person" : "people"}</span>
-      </div>`).join("");
+    list.innerHTML = `<div class="suggest-count"><b>${n}</b> ${n === 1 ? "suggestion" : "suggestions"} received. Names and details stay private.</div>`;
   });
 }
 
@@ -1069,9 +1082,9 @@ function initMap(){
   L.control.zoom({position:"topright"}).addTo(map);
   window._mapInstance = map;     // applyVoteUI re-renders the route through this
   // Labels are hidden by default to keep the map clean; they appear on hover (desktop)
-  // and once the user has zoomed in past level 9 (so each pill has room to breathe).
+  // and once the user has zoomed in past level 7 (one pinch on phone, one wheel-tick on desktop).
   const mapHost = document.getElementById("map");
-  const refreshZoomClass = () => { if(mapHost) mapHost.classList.toggle("zoomed-in", map.getZoom() >= 9); };
+  const refreshZoomClass = () => { if(mapHost) mapHost.classList.toggle("zoomed-in", map.getZoom() >= 7); };
   map.on("zoomend", refreshZoomClass);
   setTimeout(refreshZoomClass, 0);
   const sat = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",{attribution:"Tiles © Esri",maxZoom:18});
@@ -1318,10 +1331,21 @@ function initRoutes(){
   L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",{attribution:"Tiles © Esri",maxZoom:18}).addTo(map);
   L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",{maxZoom:18,opacity:0.9}).addTo(map);
 
+  // Same pattern as main map: marker labels appear past zoom 7. Default view shows just numbered chips.
+  const routeMapHost = document.getElementById("routeMap");
+  const refreshRouteZoom = () => { if(routeMapHost) routeMapHost.classList.toggle("zoomed-in", map.getZoom() >= 7); };
+  map.on("zoomend", refreshRouteZoom);
+  setTimeout(refreshRouteZoom, 0);
+
   let _layer = null;
   function showRoute(routeId){
     const r = ROUTES.find(x=>x.id===routeId); if(!r) return;
-    if(_layer){ map.removeLayer(_layer); _layer=null; }
+    // Defensive cleanup so rapid switching between routes can't leave stale layers behind.
+    if(_layer){
+      _layer.clearLayers();
+      map.removeLayer(_layer);
+      _layer = null;
+    }
     const grp = L.featureGroup();
     const coords = [];
     r.stops.forEach((s,idx)=>{
