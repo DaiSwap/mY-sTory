@@ -316,6 +316,18 @@ const RoutePicks = {
   onChange(fn){ this._listeners.push(fn); }
 };
 
+/**
+ * Resolves the effective vote for a place from the two parallel stores.
+ * Places votes (yes / maybe / skip) always win over Route picks — so a user
+ * who explicitly skipped a place on Places will see it as red on the map
+ * even if it's still in their RoutePicks set.
+ */
+function effectiveVote(placeId){
+  const v = myVotes()[placeId];
+  if(v === "yes" || v === "maybe" || v === "skip") return v;
+  return RoutePicks.has(placeId) ? "yes" : null;
+}
+
 /** Updates every .pill-tag[data-id] and .stop[data-id] in the DOM to reflect current RoutePicks state. */
 function applyRoutePicksUI(){
   const picks = new Set(RoutePicks.ids());
@@ -1020,12 +1032,14 @@ function closeSheet(){
    ============================================================ */
 function applyVoteUI(){
   const mv = myVotes();
-  // markers
+  // map markers use the effective state (Places wins, then Routes), so a user
+  // who picked a city on Routes sees a green marker even without an explicit vote
   if(window._markers){
     Object.entries(window._markers).forEach(([id,mk])=>{
       const el=mk.getElement(); if(!el) return;
       el.classList.remove("v-yes","v-maybe","v-skip");
-      if(mv[id]) el.classList.add("v-"+mv[id]);
+      const ev = effectiveVote(id);
+      if(ev) el.classList.add("v-"+ev);
     });
   }
   // place cards + open sheet
@@ -1127,11 +1141,11 @@ function renderMyRoute(map){
     return;
   }
 
+  const picked = pickedByMe();
   const mv = myVotes();
-  const picked = PLACES.filter(p => mv[p.id] === "yes" || mv[p.id] === "maybe");
 
   if(picked.length === 0){
-    if(info){ info.hidden = false; info.innerHTML = `<span>Vote <b>Yes</b> or <b>Maybe</b> on places to build your route.</span>`; }
+    if(info){ info.hidden = false; info.innerHTML = `<span>Pick places on <a href="routes.html">Routes</a> or vote on <a href="places.html">Places</a> to build your route.</span>`; }
     return;
   }
   if(picked.length === 1){
@@ -1617,10 +1631,13 @@ function pickedByGroup(){
   return rows.filter(r => r.score > 0 && r.score > median).map(r => r.place);
 }
 
-/** Returns the places the current user has voted Yes or Maybe on. */
+/** Returns the places the current user has picked — from Places votes (yes/maybe)
+ *  or from Routes picks. Explicit Places 'skip' wins and removes the place. */
 function pickedByMe(){
-  const mv = myVotes();
-  return PLACES.filter(p => mv[p.id] === "yes" || mv[p.id] === "maybe");
+  return PLACES.filter(p => {
+    const ev = effectiveVote(p.id);
+    return ev === "yes" || ev === "maybe";
+  });
 }
 
 /** Rough per-person cost for the trip — reuses the same formula as the route estimator. */
@@ -1645,37 +1662,40 @@ function _flightCoda(){
   return                 ` Best case: exit via <b>${x}</b>.`;
 }
 
-/** Builds the story paragraph for N stops. Plain English, no jargon, no abbreviations. */
+/** Builds the story paragraph for N places. Lead sentence is bold and frames who
+ *  the picks belong to (you vs the group), then a geographic detail sentence, then cost. */
 function composeStoryParagraph(stops, mode){
   const n = stops.length;
   if(n === 0) return "";
   const totalNights = stops.reduce((s, p) => s + _storyNights(p), 0);
   const cost = formatINR(_storyCostPP(stops));
   const coda = _flightCoda();
-  let body;
+  const lede = mode === "mine"
+    ? `<b>Your trip so far: ${totalNights} days across ${n} ${n === 1 ? "place" : "places"}.</b>`
+    : `<b>The group is leaning toward ${totalNights} days across ${n} ${n === 1 ? "place" : "places"}.</b>`;
+  let geo;
   if(n === 1){
-    const p = stops[0];
-    body = `Quietly simple &mdash; <b>${totalNights} ${totalNights === 1 ? "night" : "nights"} in ${escapeHTML(p.name)}</b>. Around <b>${cost}</b> per person.`;
+    geo = `Quietly simple &mdash; ${totalNights} ${totalNights === 1 ? "night" : "nights"} in <b>${escapeHTML(stops[0].name)}</b>.`;
   } else {
     const first = escapeHTML(stops[0].name);
     const last = escapeHTML(stops[n - 1].name);
     if(n === 2){
-      body = `A focused <b>${totalNights}-day</b> trip &mdash; <b>${first}</b>, then <b>${last}</b>. Around <b>${cost}</b> per person.`;
+      geo = `Starting in <b>${first}</b>, finishing in <b>${last}</b>.`;
     } else if(n === 3){
       const mid = escapeHTML(stops[1].name);
-      body = `<b>${totalNights} days</b> across <b>${first}</b>, <b>${mid}</b> and <b>${last}</b>. Around <b>${cost}</b> per person.`;
+      geo = `<b>${first}</b>, <b>${mid}</b> and <b>${last}</b>.`;
     } else if(n === 4){
       const middles = stops.slice(1, -1).map(p => escapeHTML(p.name)).join(" and ");
-      body = `<b>${totalNights} days</b> starting in <b>${first}</b>, through ${middles}, ending in <b>${last}</b>. Around <b>${cost}</b> per person.`;
+      geo = `Starting in <b>${first}</b>, through ${middles}, ending in <b>${last}</b>.`;
     } else {
       const middlesArr = stops.slice(1, -1).map(p => escapeHTML(p.name));
       const middles = middlesArr.length <= 3
         ? middlesArr.slice(0, -1).join(", ") + " and " + middlesArr[middlesArr.length - 1]
         : `${middlesArr.slice(0, 2).join(", ")} and ${middlesArr.length - 2} more`;
-      body = `<b>${totalNights} days, ${n} stops</b> &mdash; starting in <b>${first}</b>, working south through ${middles}, ending in <b>${last}</b>. Around <b>${cost}</b> per person.`;
+      geo = `Starting in <b>${first}</b>, working south through ${middles}, ending in <b>${last}</b>.`;
     }
   }
-  return body + coda;
+  return `${lede} ${geo} Around <b>${cost}</b> per person.${coda}`;
 }
 
 /** Renders the small horizontal strip of stop chips with km between. */
@@ -1696,8 +1716,8 @@ function renderStoryStrip(stops){
 function renderStoryToggle(mode){
   return `
     <div class="story-toggle" role="tablist" aria-label="Trip view">
-      <button class="story-tab ${mode === "group" ? "on" : ""}" data-mode="group" role="tab" aria-selected="${mode === "group"}">Most selected</button>
       <button class="story-tab ${mode === "mine" ? "on" : ""}" data-mode="mine" role="tab" aria-selected="${mode === "mine"}">My picks</button>
+      <button class="story-tab ${mode === "group" ? "on" : ""}" data-mode="group" role="tab" aria-selected="${mode === "group"}">What most picked</button>
     </div>`;
 }
 
@@ -1709,15 +1729,15 @@ function renderTripStory(){
   const host = document.getElementById("trip-story");
   if(!host) return;
 
-  const mode = host.dataset.mode === "mine" ? "mine" : "group";
+  const mode = host.dataset.mode === "group" ? "group" : "mine";
   const stops = mode === "mine" ? pickedByMe() : pickedByGroup();
 
   if(stops.length === 0){
     host.innerHTML = `
       ${renderStoryToggle(mode)}
       <p class="story-empty">${mode === "mine"
-        ? "Cast a few Yes or Maybe votes and your picks will land here."
-        : "When the group's votes come in, the most-selected places will land here."}</p>`;
+        ? "Pick places on Routes or vote on Places — your trip lands here."
+        : "When the group's votes come in, the places most have picked land here."}</p>`;
     bindStoryToggle(host);
     return;
   }
@@ -1727,9 +1747,8 @@ function renderTripStory(){
 
   host.innerHTML = `
     ${renderStoryToggle(mode)}
-    <h3 class="story-headline">${mode === "mine" ? "Your picks so far." : "Most selected so far."}</h3>
     <p class="story-paragraph">${composeStoryParagraph(stops, mode)}</p>
-    <div class="story-strip" aria-label="Stops and distances">${renderStoryStrip(stops)}</div>
+    <div class="story-strip" aria-label="Places and distances">${renderStoryStrip(stops)}</div>
     <p class="story-note">A rough first draft &mdash; verify before booking.</p>`;
   bindStoryToggle(host);
 }
@@ -1745,61 +1764,13 @@ function bindStoryToggle(host){
 }
 
 /**
- * Renders the results page as a horizontal bar chart.
- * Bar length = each place's score (yes×2 + maybe) as a fraction of the maximum possible
- * (#voters × 2). The bar is split: green section = yes contribution, amber = maybe.
- * Counts (✓ ~ ✕) appear to the right; clicking a row opens the place's detail sheet.
- * All voter names are HTML-escaped — Firestore data is treated as untrusted.
+ * Renders the results page. The per-place bar chart was removed — the trip-story
+ * synthesis above (with My picks / What most picked toggle) is the single answer
+ * to "what did the group decide". This function now just refreshes the voter count
+ * and re-renders the story.
  */
 function renderResults(){
-  const host = document.getElementById("results"); if(!host) return;
-  const voters = [...new Set(ALL_VOTES.map(v => v.name).filter(Boolean))];
-  animateCount(document.getElementById("voterCount"), voters.length);
-
-  if(ALL_VOTES.length === 0){
-    host.innerHTML = `<div class="empty">No votes yet. Open the <a href="map.html" style="color:var(--accent);font-weight:600">map</a> or <a href="places.html" style="color:var(--accent);font-weight:600">places</a> and start voting.</div>`;
-    renderTripStory();   // still render the empty-state trip-story below
-    return;
-  }
-
-  const rows = PLACES.map(d => {
-    const vs = ALL_VOTES.filter(v => v.placeId === d.id);
-    const yes = vs.filter(v => v.vote === "yes");
-    const maybe = vs.filter(v => v.vote === "maybe");
-    const skip = vs.filter(v => v.vote === "skip");
-    return { d, yes, maybe, skip, score: yes.length * 2 + maybe.length };
-  }).sort((a, b) => b.score - a.score || b.yes.length - a.yes.length);
-
-  // Bars are scaled so a place where everyone voted Yes fills the whole track.
-  const numVoters = Math.max(1, voters.length);
-  const maxPossible = numVoters * 2;
-
-  host.innerHTML = `
-    <div class="res-chart" role="list">
-      ${rows.map((r, i) => {
-        const yesPct = (r.yes.length * 2 / maxPossible) * 100;
-        const maybePct = (r.maybe.length / maxPossible) * 100;
-        return `
-          <div class="res-bar" role="listitem" tabindex="0" data-id="${r.d.id}" aria-label="Rank ${i+1}: ${escapeHTML(r.d.name)}, ${r.yes.length} yes, ${r.maybe.length} maybe, ${r.skip.length} skip">
-            <div class="rb-rank">#${i+1}</div>
-            <div class="rb-name">${escapeHTML(r.d.name)}</div>
-            <div class="rb-track">
-              <div class="rb-fill-yes" style="width:${yesPct}%"></div>
-              <div class="rb-fill-maybe" style="width:${maybePct}%;left:${yesPct}%"></div>
-            </div>
-          </div>`;
-      }).join("")}
-    </div>
-    ${voters.length ? `<div class="res-voters"><b>${voters.length}</b> ${voters.length === 1 ? "person has" : "people have"} voted. <span class="rv-dim">Individual names stay private &mdash; only the totals are shared.</span></div>` : ""}`;
-
-  host.querySelectorAll(".res-bar").forEach(el => {
-    el.addEventListener("click", () => openSheet(el.dataset.id));
-    el.addEventListener("keydown", e => {
-      if(e.key === "Enter" || e.key === " "){ e.preventDefault(); openSheet(el.dataset.id); }
-    });
-  });
-
-  // The closing scene: keep the trip-story block in sync with every vote change.
+  animateCount(document.getElementById("voterCount"), [...new Set(ALL_VOTES.map(v => v.name).filter(Boolean))].length);
   renderTripStory();
 }
 

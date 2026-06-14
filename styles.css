@@ -307,40 +307,9 @@ body.reveal-fallback .reveal:not(.in){opacity:1;transform:none;transition:opacit
 .res-meta{display:flex;align-items:center;gap:10px;margin-top:30px;color:var(--ink-2);font-size:15px}
 .res-meta .dot-live{width:9px;height:9px;border-radius:50%;background:var(--yes);box-shadow:0 0 0 0 rgba(31,157,87,.5);animation:livedot 1.6s infinite}
 @keyframes livedot{0%{box-shadow:0 0 0 0 rgba(31,157,87,.5)}70%{box-shadow:0 0 0 8px rgba(31,157,87,0)}100%{box-shadow:0 0 0 0 rgba(31,157,87,0)}}
-.res-list{margin-top:26px;display:flex;flex-direction:column;gap:12px}
+.res-private{text-align:center;margin-top:30px;font-size:13px;color:var(--ink-3);font-style:italic}
 .empty{color:var(--ink-3);text-align:center;padding:60px 20px;font-size:16px}
 
-/* Horizontal-bar results chart: clean list of bars, place name + counts. */
-.res-chart{display:flex;flex-direction:column;gap:6px;margin-top:8px}
-.res-bar{
-  display:grid;
-  grid-template-columns:36px minmax(0,1.3fr) minmax(0,3fr);
-  align-items:center;gap:14px;
-  padding:10px 14px;
-  background:transparent;border:0;border-radius:10px;
-  cursor:pointer;transition:background .15s ease;
-}
-.res-bar:hover{background:var(--bg-2)}
-.res-bar:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.rb-rank{font-size:12px;font-weight:700;color:var(--ink-3);letter-spacing:.04em}
-.rb-name{font-size:15px;font-weight:600;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.rb-track{position:relative;height:18px;background:rgba(0,0,0,0.05);border-radius:6px;overflow:hidden}
-.rb-fill-yes,.rb-fill-maybe{position:absolute;top:0;bottom:0;transition:width .55s cubic-bezier(.2,.7,.2,1),left .55s cubic-bezier(.2,.7,.2,1)}
-.rb-fill-yes{left:0;background:var(--yes);border-radius:6px 0 0 6px}
-.rb-fill-maybe{background:var(--maybe)}
-.rb-fill-yes:only-child,.rb-fill-yes:last-child{border-radius:6px}
-.rb-fill-maybe:last-child{border-radius:0 6px 6px 0}
-.rb-counts{display:flex;gap:10px;font-size:13px;font-weight:600;white-space:nowrap;justify-content:flex-end}
-.rb-y{color:var(--yes)} .rb-m{color:var(--maybe)} .rb-s{color:var(--ink-3)}
-.res-voters{margin-top:28px;padding:14px 18px;text-align:center;background:var(--bg-2);border-radius:12px;font-size:14px;color:var(--ink-2);line-height:1.6}
-.res-voters b{color:var(--ink);font-weight:600}
-.res-voters .rv-dim{color:var(--ink-3);font-size:13px;display:block;margin-top:2px}
-
-/* Subhead above the per-place bar list on Results */
-.res-subhead{
-  font-size:11px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;
-  color:var(--ink-3);margin-bottom:12px;
-}
 
 /* Travel page — best-case route selector (entry city + exit airport) */
 .travel-pick{
@@ -412,13 +381,13 @@ body.reveal-fallback .reveal:not(.in){opacity:1;transform:none;transition:opacit
 .story-tab.on{background:var(--ink);color:#fff}
 .story-tab:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
-.story-headline{
-  font-size:clamp(20px,2.4vw,26px);font-weight:700;letter-spacing:-.02em;
-  margin-bottom:14px;color:var(--ink);
-}
 .story-paragraph{
-  font-size:clamp(16px,1.7vw,18.5px);line-height:1.65;color:var(--ink-2);
-  margin-bottom:22px;max-width:62ch;
+  font-size:clamp(16.5px,1.8vw,19px);line-height:1.65;color:var(--ink-2);
+  margin-top:14px;margin-bottom:22px;max-width:62ch;
+}
+.story-paragraph b:first-child{
+  display:block;color:var(--ink);font-size:clamp(20px,2.4vw,26px);
+  letter-spacing:-.02em;line-height:1.2;margin-bottom:8px;
 }
 .story-paragraph b{color:var(--ink);font-weight:600}
 .story-strip{
@@ -449,8 +418,8 @@ body.reveal-fallback .reveal:not(.in){opacity:1;transform:none;transition:opacit
 
 @media(max-width:600px){
   .trip-story{padding:22px 20px;border-radius:18px}
-  .story-headline{font-size:19px}
   .story-paragraph{font-size:15.5px}
+  .story-paragraph b:first-child{font-size:19px}
 }
 
 /* ---------- place suggestions ---------- */
@@ -483,19 +452,6 @@ body.reveal-fallback .reveal:not(.in){opacity:1;transform:none;transition:opacit
   .suggest-form{flex-direction:column}
   .suggest-form button{width:100%}
   .suggest-card{padding:20px}
-}
-
-@media(max-width:680px){
-  .res-bar{
-    grid-template-columns:34px minmax(0,1fr);
-    grid-template-areas:
-      "rank name"
-      "bar bar";
-    gap:6px 10px;padding:12px 14px;
-  }
-  .rb-rank{grid-area:rank;font-size:12px}
-  .rb-name{grid-area:name;font-size:14.5px}
-  .rb-track{grid-area:bar;height:18px}
 }
 
 
