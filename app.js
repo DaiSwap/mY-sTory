@@ -184,12 +184,12 @@ const WHEN = [
    own device); it becomes live + shared once the config is in.
    ============================================================ */
 const firebaseConfig = {
-  apiKey: "PASTE_YOUR_API_KEY",
-  authDomain: "PASTE.firebaseapp.com",
-  projectId: "PASTE_PROJECT_ID",
-  storageBucket: "PASTE.appspot.com",
-  messagingSenderId: "PASTE",
-  appId: "PASTE"
+  apiKey: "AIzaSyCqE-SYgTzOiyXG9z9e0jQsXbOMnGQyBNM",
+  authDomain: "daiswap-level1.firebaseapp.com",
+  projectId: "daiswap-level1",
+  storageBucket: "daiswap-level1.firebasestorage.app",
+  messagingSenderId: "1038264255996",
+  appId: "1:1038264255996:web:ec8b0ebfcfad8f02e71e79"
 };
 
 const FB_READY = typeof firebase !== "undefined" && firebaseConfig.apiKey && firebaseConfig.apiKey !== "PASTE_YOUR_API_KEY";
