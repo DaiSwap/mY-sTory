@@ -8,16 +8,27 @@ open file.
 
 ## Currently queued
 
-Four queued items. The first is a bundle of small fixes; the next
-three are the bigger work that finishes the UX restructure that
-shipped in PRs #18–#22.
+Two PRs left to finish the UX restructure. PR-02 (quick fixes), PR-A,
+and PR-D have shipped — see [`../feedback-log.md`](../feedback-log.md)
+for the full shipped history.
 
 | # | Branch label | One-line summary | Plan |
 |---|---|---|---|
-| **02** | `fix/02-quick-fixes` | Five small fixes bundled — missed zoom threshold + curated route marker labels + stale-state bug + suggestion list/count + suggestion guardrails. | [`02-quick-fixes.md`](./02-quick-fixes.md) |
+| **04 (PR-C)** | `feature/curated-routes-redesign` | Replace 3-cards-above-map with tabs + summary + map + horizontal city flow. **Next up.** | [`04-curated-routes-redesign.md`](./04-curated-routes-redesign.md) |
 | **03 (PR-B)** | `feature/home-flow-diagram` | Replace the bare Home page with a calligraphic flowing-curve SVG of the trip journey. Single Plan-the-trip CTA. | [`03-home-flow-diagram.md`](./03-home-flow-diagram.md) |
-| **04 (PR-C)** | `feature/curated-routes-redesign` | Replace 3-cards-above-map with tabs + summary + map + horizontal city flow. | [`04-curated-routes-redesign.md`](./04-curated-routes-redesign.md) |
-| **05 (PR-D)** | `feature/routepicks-firestore-sync` | Sync `RoutePicks` to Firestore so "What most picked" includes other users' Routes picks. | [`05-routepicks-firestore-sync.md`](./05-routepicks-firestore-sync.md) |
+
+## Shipped
+
+| # | PR | Plan |
+|---|---|---|
+| 02 | PR #25 | [`02-quick-fixes.md`](./02-quick-fixes.md) |
+| 05 (PR-D) | PR #26 | [`05-routepicks-firestore-sync.md`](./05-routepicks-firestore-sync.md) |
+
+## Action item (not code)
+
+Deploy the Firestore rule for `/routePicks/{userId}` — see PR #26 body
+for the exact rule block. Until then, RoutePicks writes silently fail
+and the group view is local-only.
 
 Also see [`../feedback-log.md`](../feedback-log.md) for the full
 chronological list of every piece of user feedback with its current
