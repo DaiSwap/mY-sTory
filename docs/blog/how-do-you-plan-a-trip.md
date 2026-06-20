@@ -1,4 +1,4 @@
-# Mums always say they don't mind
+# How do you plan a trip with people who say they don't mind?
 
 *Trying to plan a family trip to Vietnam, and what I learned about asking.*
 
